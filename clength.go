@@ -4,26 +4,25 @@ import "strings"
 
 type ContentLength int64
 
-func (c ContentLength) v() int64 {
+func (c ContentLength) v() (clen int64) {
 	return int64(c)
 }
 
-func (c ContentLength) vshort() int {
+func (c ContentLength) vshort() (clen int) {
 	return int(c)
 }
 
-func (c ContentLength) String() string {
+func (c ContentLength) String() (clen string) {
 	return c.Format(
 		" ",
 		SizeOptionTB,
 		SizeOptionGB,
 		SizeOptionMB,
 		SizeOptionKB,
-		SizeOptionBy,
 	)
 }
 
-func (c ContentLength) Format(sep string, sizeOpts ...SizeOption) string {
+func (c ContentLength) Format(sep string, sizeOpts ...SizeOption) (clen string) {
 	b := strings.Builder{}
 	n := len(sizeOpts) - 1
 	for i, opt := range sizeOpts {
@@ -39,9 +38,10 @@ func (c ContentLength) Format(sep string, sizeOpts ...SizeOption) string {
 		}
 		b.WriteString(sep)
 	}
-	return b.String()
+	clen = b.String()
+	return
 }
 
-func (c *ContentLength) IsUnknown() bool {
+func (c *ContentLength) IsUnknown() (unknown bool) {
 	return c.v() == -1
 }

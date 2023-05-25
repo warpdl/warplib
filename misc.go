@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -73,6 +74,11 @@ func getFileName(preName, hash string) string {
 	return fmt.Sprintf("%s_%s.warp", preName, hash)
 }
 
+func dirExists(name string) bool {
+	_, err := os.ReadDir(name)
+	return !os.IsNotExist(err)
+}
+
 func Place[t any](src []t, e t, index int) (dst []t) {
 	dst = make([]t, len(src)+1)
 	var o int
@@ -100,3 +106,35 @@ func (d *duration) get() (avg time.Duration) {
 	avg = d.t
 	return
 }
+
+var ConfigDir = func() (warpDir string) {
+	cdr, err := os.UserConfigDir()
+	if err != nil {
+		panic(err)
+	}
+	warpDir = cdr + "/warp"
+	if dirExists(warpDir) {
+		return
+	}
+	err = os.Mkdir(warpDir, os.ModePerm)
+	if err != nil {
+		panic(err)
+	}
+	return
+}()
+
+var CacheDir = func() (warpDir string) {
+	cdr, err := os.UserCacheDir()
+	if err != nil {
+		panic(err)
+	}
+	warpDir = cdr + "/warp"
+	if dirExists(warpDir) {
+		return
+	}
+	err = os.Mkdir(warpDir, os.ModePerm)
+	if err != nil {
+		panic(err)
+	}
+	return
+}()

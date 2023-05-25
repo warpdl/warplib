@@ -2,41 +2,57 @@ package warplib
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Downloader struct {
-	wg                            *sync.WaitGroup
+	Handlers                      Handlers
+	fileName                      string
+	contentLength                 ContentLength
+	dlLoc                         string
+	wg                            sync.WaitGroup
 	chunk                         int
 	url                           string
 	client                        *http.Client
 	numParts, currParts, maxParts int
-	fileName                      string
-	contentLength                 ContentLength
-	Handlers                      Handlers
 	force                         bool
 	ohmap                         VMap[int64, string]
+	dlpath                        string
 }
 
-func NewDownloader(client *http.Client, url string, forceParts bool) (*Downloader, error) {
-	d := Downloader{
-		wg:       new(sync.WaitGroup),
+func NewDownloader(client *http.Client, url string, forceParts bool) (d *Downloader, err error) {
+	d = &Downloader{
+		wg:       sync.WaitGroup{},
 		client:   client,
 		url:      url,
 		maxParts: 1,
 		chunk:    int(DEF_CHUNK_SIZE),
 		force:    forceParts,
 	}
-	return &d, d.fetchInfo()
+	err = d.fetchInfo()
+	if err != nil {
+		return
+	}
+	return d, d.setupDlPath()
 }
 
 func (d *Downloader) SetMaxParts(n int) {
 	d.maxParts = n
+}
+
+func (d *Downloader) SetDownloadLocation(loc string) {
+	d.dlLoc = strings.TrimSuffix(loc, "/")
+}
+
+func (d *Downloader) SetFileName(name string) {
+	d.fileName = name
 }
 
 func (d *Downloader) GetParts() int {
@@ -70,7 +86,7 @@ func (d *Downloader) Start() (err error) {
 			foff += rpartSize
 		}
 		d.wg.Add(1)
-		go d.handlePart(ioff, foff, 2*MB)
+		go d.handlePart(ioff, foff, 4*MB)
 	}
 	d.wg.Wait()
 	return d.compile()
@@ -111,10 +127,23 @@ func (d *Downloader) handlePart(ioff, foff, espeed int64) {
 }
 
 func (d *Downloader) spawnPart(ioff, foff int64, espeed int64) (part *Part) {
-	part = newPart(d.client, d.url, d.chunk, espeed, "dl/", d.Handlers.ProgressHandler)
+	part = newPart(d.client, d.url, d.chunk, espeed, d.dlpath, d.Handlers.ProgressHandler)
 	part.offset = ioff
 	d.ohmap.Set(ioff, part.hash)
 	d.Handlers.SpawnPartHandler(part.hash, ioff, foff)
+	return
+}
+
+func (d *Downloader) setupDlPath() (err error) {
+	tstamp := time.Now().UnixNano()
+	dlpath := fmt.Sprintf(
+		"%s/%s_%d/", ConfigDir, d.fileName, tstamp,
+	)
+	err = os.Mkdir(dlpath, os.ModePerm)
+	if err != nil {
+		return
+	}
+	d.dlpath = dlpath
 	return
 }
 
@@ -227,16 +256,26 @@ func (d *Downloader) getPartSize() (partSize, rpartSize int64) {
 }
 
 func (d *Downloader) compile() (err error) {
-	file, ef := os.Create("dl/" + d.fileName)
+	if d.dlLoc == "" {
+		d.dlLoc = "."
+	}
+	svPath := strings.Join([]string{d.dlLoc, d.fileName}, "/")
+	file, ef := os.Create(svPath)
 	if ef != nil {
 		err = ef
 	}
 	offsets := d.ohmap.Keys()
+	if len(offsets) == 1 {
+		hash := d.ohmap.GetUnsafe(offsets[0])
+		fName := getFileName(d.dlpath, hash)
+		err = os.Rename(fName, svPath)
+		return
+	}
 	sortInt64s(offsets)
 	for _, offset := range offsets {
 		hash := d.ohmap.GetUnsafe(offset)
 		fName := getFileName(
-			"dl/",
+			d.dlpath,
 			hash,
 		)
 		f, ef := os.Open(fName)
