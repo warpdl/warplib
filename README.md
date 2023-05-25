@@ -15,7 +15,6 @@ Here, we will discuss to install warplib and use it projects.
 
 - Include warplib in `GOPRIVATE` environment variable of your Go installation.
 <br>
-<br>
 
 **Setting up `GOPRIVATE`**
 
@@ -23,7 +22,7 @@ Here, we will discuss to install warplib and use it projects.
 
 You need to firstly verify that whether your    `GOPRIVATE` env var is contains anything or not, for that you need to run the following command:
 ```sh
-go env GOPRIVATE
+$ go env GOPRIVATE
 ``` 
 
 If the output is empty then you don't have any existing private go module configured and vice versa. We will discuss both the cases, you may follow whichever suits your configuration: 
@@ -32,7 +31,7 @@ If the output is empty then you don't have any existing private go module config
     
     You don't need to worry much if your `GOPRIVATE` is already empty and just run the following command in your terminal:
     ```sh
-    go env -w GOPRIVATE=github.com/warpdl/warplib
+    $ go env -w GOPRIVATE=github.com/warpdl/warplib
     ```
 - `GOPRIVATE` is not empty
     
@@ -40,18 +39,18 @@ If the output is empty then you don't have any existing private go module config
 
     Let us suppose that the output for `GOPRIVATE` was `github.com/golang/package` then you will have to run the following command in your terminal:
     ```sh
-    go env -w GOPRIVATE=github.com/golang/package,github.com/warpdl/warplib
+    $ go env -w GOPRIVATE=github.com/golang/package,github.com/warpdl/warplib
     ```
 
 Congratulations! You have successfully configured the private go module for warplib.
-<br>
+
 <br>
 
 **Including `warplib` in your project**
 
 You can include warplib in your project by using standard `go get` command after succesfully configuring things stated above. 
 ```sh
-go get github.com/warpdl/warplib
+$ go get github.com/warpdl/warplib
 ```
 <br>
 
@@ -59,16 +58,12 @@ go get github.com/warpdl/warplib
 
 Pull requests and stars are always welcome. For bugs and feature requests, [please create an issue](../../issues/new).
 
-<br>
-
 ### **Author**
 
 **Veer Pratap Singh**
 
 * [github/anonyindian](https://github.com/anonyindian)
 * [telegram/CaptainPicard](https://t.me/CaptainPicard)
-
-<br>
 
 ### **License**
 
