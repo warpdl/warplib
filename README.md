@@ -52,7 +52,6 @@ You can include warplib in your project by using standard `go get` command after
 ```sh
 $ go get github.com/warpdl/warplib
 ```
-<br>
 
 ### **Contributing**
 
@@ -69,4 +68,3 @@ Pull requests and stars are always welcome. For bugs and feature requests, [plea
 
 Copyright © 2023, [WarpDL](https://github.com/jonschlinkert).
 Released under the [AGPL-V3 License](LICENSE).
-
