@@ -66,5 +66,5 @@ Pull requests and stars are always welcome. For bugs and feature requests, [plea
 
 ### **License**
 
-Copyright © 2023, [WarpDL](https://github.com/jonschlinkert).
+Copyright © 2023, [WarpDL](https://github.com/warpdl).
 Released under the [AGPL-V3 License](LICENSE).
