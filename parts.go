@@ -22,7 +22,9 @@ type Part struct {
 	// number of bytes downloaded
 	read int64
 	// progress handler
-	handler ProgressHandlerFunc
+	pfunc ProgressHandlerFunc
+	// dl compl handler
+	ofunc OnCompleteHandlerFunc
 	// http client
 	client *http.Client
 	// prename
@@ -35,13 +37,14 @@ type Part struct {
 	espeed int64
 }
 
-func newPart(client *http.Client, url string, copyChunk int, preName string, pHandler ProgressHandlerFunc) *Part {
+func newPart(client *http.Client, url string, copyChunk int, preName string, pHandler ProgressHandlerFunc, oHandler OnCompleteHandlerFunc) *Part {
 	p := Part{
 		url:     url,
 		client:  client,
 		chunk:   copyChunk,
 		preName: preName,
-		handler: pHandler,
+		pfunc:   pHandler,
+		ofunc:   oHandler,
 	}
 	p.setHash()
 	p.createPartFile()
@@ -82,19 +85,24 @@ func (p *Part) copyBuffer(src io.Reader, dst io.Writer, force bool) (slow bool, 
 			te, err = getSpeed(func() error {
 				return p.copyBufferChunk(src, dst, buf)
 			})
-			if err != nil && err != io.EOF {
-				return
+			if err != nil {
+				break
 			}
 			if !force && te > getDownloadTime(p.espeed, int64(p.chunk)) {
 				slow = true
 				return
 			}
-		} else {
-			err = p.copyBufferChunk(src, dst, buf)
+			continue
 		}
-		if err == io.EOF {
+		err = p.copyBufferChunk(src, dst, buf)
+		go p.pfunc(p.hash, p.read)
+		if err != nil {
 			break
 		}
+	}
+	if err == io.EOF {
+		err = nil
+		go p.ofunc(p.hash, p.read)
 	}
 	return
 }
@@ -110,7 +118,6 @@ func (p *Part) copyBufferChunk(src io.Reader, dst io.Writer, buf []byte) (err er
 			}
 		}
 		p.read += int64(nw)
-		go p.handler(p.hash, nw)
 		if ew != nil {
 			err = ew
 			return

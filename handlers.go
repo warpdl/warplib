@@ -3,8 +3,9 @@ package warplib
 type (
 	ErrorHandlerFunc       func(err error)
 	SpawnPartHandlerFunc   func(hash string, ioff, foff int64)
-	RespawnPartHandlerFunc func(hash string, nread, ioffNew, foffNew int64)
-	ProgressHandlerFunc    func(hash string, nread int)
+	RespawnPartHandlerFunc func(hash string, ioffNew, foffNew int64)
+	ProgressHandlerFunc    func(hash string, nread int64)
+	OnCompleteHandlerFunc  func(hash string, tread int64)
 )
 
 type Handlers struct {
@@ -12,4 +13,5 @@ type Handlers struct {
 	RespawnPartHandler RespawnPartHandlerFunc
 	ProgressHandler    ProgressHandlerFunc
 	ErrorHandler       ErrorHandlerFunc
+	OnCompleteHandler  OnCompleteHandlerFunc
 }
