@@ -35,18 +35,21 @@ type Part struct {
 	espeed int64
 }
 
-func newPart(client *http.Client, url string, copyChunk int, espeed int64, preName string, pHandler ProgressHandlerFunc) *Part {
+func newPart(client *http.Client, url string, copyChunk int, preName string, pHandler ProgressHandlerFunc) *Part {
 	p := Part{
 		url:     url,
 		client:  client,
 		chunk:   copyChunk,
 		preName: preName,
 		handler: pHandler,
-		espeed:  espeed,
 	}
 	p.setHash()
 	p.createPartFile()
 	return &p
+}
+
+func (p *Part) setEpeed(espeed int64) {
+	p.espeed = espeed
 }
 
 func (p *Part) download(ioff, foff int64, force bool) (slow bool, err error) {
