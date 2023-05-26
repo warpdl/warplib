@@ -93,7 +93,6 @@ func (p *Part) copyBuffer(src io.Reader, dst io.Writer, force bool) (slow bool, 
 			err = p.copyBufferChunk(src, dst, buf)
 		}
 		if err == io.EOF {
-			err = nil
 			break
 		}
 	}
@@ -140,7 +139,7 @@ func setRange(header http.Header, ioff, foff int64) {
 }
 
 func (p *Part) setHash() {
-	t := make([]byte, 1)
+	t := make([]byte, 2)
 	rand.Read(t)
 	p.hash = hex.EncodeToString(t)
 }

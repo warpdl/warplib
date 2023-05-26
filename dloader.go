@@ -131,6 +131,9 @@ func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64) {
 	part.setEpeed(espeed)
 	slow, err := part.download(ioff, foff, false)
 	if err != nil {
+		if err == io.EOF {
+			return
+		}
 		d.Handlers.ErrorHandler(err)
 		return
 	}
