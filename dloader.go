@@ -96,6 +96,39 @@ func (d *Downloader) handlePart(ioff, foff, espeed int64) {
 	d.currParts++
 	part := d.spawnPart(ioff, foff, espeed)
 	defer func() { d.currParts--; part.close(); d.wg.Done() }()
+	d.runPart(part, ioff, foff, espeed)
+	// slow, err := part.download(ioff, foff, false)
+	// if err != nil {
+	// 	d.Handlers.ErrorHandler(err)
+	// 	return
+	// }
+	// if !slow {
+	// 	return
+	// }
+	// ioff += part.read
+	// if d.currParts >= d.maxParts {
+	// 	_, err = part.download(ioff, foff, true)
+	// 	if err != nil {
+	// 		d.Handlers.ErrorHandler(err)
+	// 	}
+	// 	return
+	// }
+
+	// div := (foff - ioff) / 2
+
+	// d.wg.Add(1)
+	// go d.handlePart(ioff+div, foff, espeed/2)
+
+	// foff = ioff + div - 1
+	// d.Handlers.RespawnPartHandler(part.hash, part.read, ioff, foff)
+	// _, err = part.download(ioff, foff, true)
+	// if err != nil {
+	// 	d.Handlers.ErrorHandler(err)
+	// }
+}
+
+func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64) {
+	part.setEpeed(espeed)
 	slow, err := part.download(ioff, foff, false)
 	if err != nil {
 		d.Handlers.ErrorHandler(err)
@@ -119,46 +152,14 @@ func (d *Downloader) handlePart(ioff, foff, espeed int64) {
 	go d.handlePart(ioff+div, foff, espeed/2)
 
 	foff = ioff + div - 1
+
 	d.Handlers.RespawnPartHandler(part.hash, part.read, ioff, foff)
-	_, err = part.download(ioff, foff, true)
-	if err != nil {
-		d.Handlers.ErrorHandler(err)
-	}
+	d.runPart(part, ioff, foff, espeed/2)
 }
-
-// func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64) {
-// 	slow, err := part.download(ioff, foff, false)
-// 	if err != nil {
-// 		d.Handlers.ErrorHandler(err)
-// 		return
-// 	}
-// 	if !slow {
-// 		return
-// 	}
-// 	ioff += part.read
-// 	if d.currParts >= d.maxParts {
-// 		_, err = part.download(ioff, foff, true)
-// 		if err != nil {
-// 			d.Handlers.ErrorHandler(err)
-// 		}
-// 		return
-// 	}
-
-// 	div := (foff - ioff) / 2
-
-// 	d.wg.Add(1)
-// 	go d.handlePart(ioff+div, foff, espeed/2)
-
-// 	foff = ioff + div - 1
-
-// 	d.Handlers.RespawnPartHandler(part.hash, part.read, ioff, foff)
-// 	d.runPart(part, ioff, foff, espeed/2)
-// }
 
 func (d *Downloader) spawnPart(ioff, foff, espeed int64) (part *Part) {
 	part = newPart(d.client, d.url, d.chunk, d.dlpath, d.Handlers.ProgressHandler)
 	part.offset = ioff
-	part.setEpeed(espeed)
 	d.ohmap.Set(ioff, part.hash)
 	d.Handlers.SpawnPartHandler(part.hash, ioff, foff)
 	return
