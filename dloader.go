@@ -144,6 +144,9 @@ func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64) {
 	if d.currParts >= d.maxParts {
 		_, err = part.download(ioff, foff, true)
 		if err != nil {
+			if err == io.EOF {
+				return
+			}
 			d.Handlers.ErrorHandler(err)
 		}
 		return
