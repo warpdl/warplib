@@ -52,6 +52,9 @@ func (d *Downloader) SetDownloadLocation(loc string) {
 }
 
 func (d *Downloader) SetFileName(name string) {
+	if name == "" {
+		return
+	}
 	d.fileName = name
 }
 
