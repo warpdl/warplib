@@ -44,6 +44,9 @@ func NewDownloader(client *http.Client, url string, forceParts bool) (d *Downloa
 }
 
 func (d *Downloader) SetMaxParts(n int) {
+	if d.numParts > n {
+		d.numParts = n
+	}
 	d.maxParts = n
 }
 
@@ -100,34 +103,6 @@ func (d *Downloader) handlePart(ioff, foff, espeed int64) {
 	part := d.spawnPart(ioff, foff, espeed)
 	defer func() { d.currParts--; part.close(); d.wg.Done() }()
 	d.runPart(part, ioff, foff, espeed)
-	// slow, err := part.download(ioff, foff, false)
-	// if err != nil {
-	// 	d.Handlers.ErrorHandler(err)
-	// 	return
-	// }
-	// if !slow {
-	// 	return
-	// }
-	// ioff += part.read
-	// if d.currParts >= d.maxParts {
-	// 	_, err = part.download(ioff, foff, true)
-	// 	if err != nil {
-	// 		d.Handlers.ErrorHandler(err)
-	// 	}
-	// 	return
-	// }
-
-	// div := (foff - ioff) / 2
-
-	// d.wg.Add(1)
-	// go d.handlePart(ioff+div, foff, espeed/2)
-
-	// foff = ioff + div - 1
-	// d.Handlers.RespawnPartHandler(part.hash, part.read, ioff, foff)
-	// _, err = part.download(ioff, foff, true)
-	// if err != nil {
-	// 	d.Handlers.ErrorHandler(err)
-	// }
 }
 
 func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64) {
@@ -141,8 +116,8 @@ func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64) {
 	if !slow {
 		return
 	}
+
 	poff := part.offset + part.read
-	// ioff += part.read
 
 	if d.currParts >= d.maxParts {
 		_, err = part.download(poff, foff, true)

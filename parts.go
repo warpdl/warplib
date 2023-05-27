@@ -95,7 +95,6 @@ func (p *Part) copyBuffer(src io.Reader, dst io.Writer, force bool) (slow bool, 
 			continue
 		}
 		err = p.copyBufferChunk(src, dst, buf)
-		go p.pfunc(p.hash, p.read)
 		if err != nil {
 			break
 		}
@@ -118,6 +117,7 @@ func (p *Part) copyBufferChunk(src io.Reader, dst io.Writer, buf []byte) (err er
 			}
 		}
 		p.read += int64(nw)
+		go p.pfunc(p.hash, nw)
 		if ew != nil {
 			err = ew
 			return
