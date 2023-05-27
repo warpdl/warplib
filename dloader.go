@@ -120,10 +120,11 @@ func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64) {
 	poff := part.offset + part.read
 
 	if d.currParts >= d.maxParts {
-		_, err = part.download(poff, foff, true)
-		if err != nil {
-			d.Handlers.ErrorHandler(err)
-		}
+		d.runPart(part, poff, foff, espeed)
+		// _, err = part.download(poff, foff, true)
+		// if err != nil {
+		// 	d.Handlers.ErrorHandler(err)
+		// }
 		return
 	}
 
@@ -247,15 +248,15 @@ func (d *Downloader) prepareDownloader() (err error) {
 	case te > getDownloadTime(MB, int64(size)):
 		// chunk is downloaded at a speed less than 1MB/s
 		// slow download
-		d.numParts = 8
+		d.numParts = 12
 	case te < getDownloadTime(10*MB, int64(size)):
 		// chunk is downloaded at a speed more than 10MB/s
 		// super fast download
-		d.numParts = 2
+		d.numParts = 8
 	case te < getDownloadTime(5*MB, int64(size)):
 		// chunk is downloaded at a speed more than 5MB/s
 		// fast download
-		d.numParts = 4
+		d.numParts = 10
 	}
 	return
 }

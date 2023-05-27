@@ -81,7 +81,7 @@ func (p *Part) copyBuffer(src io.Reader, dst io.Writer, force bool) (slow bool, 
 	var n int
 	for {
 		n++
-		if n%50 == 0 {
+		if n%10 == 0 {
 			te, err = getSpeed(func() error {
 				return p.copyBufferChunk(src, dst, buf)
 			})
