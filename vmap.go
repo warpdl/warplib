@@ -9,6 +9,12 @@ type VMap[kT comparable, vT any] struct {
 	mu sync.RWMutex
 }
 
+func NewVMap[kT comparable, vT any]() VMap[kT, vT] {
+	return VMap[kT, vT]{
+		kv: make(map[kT]vT),
+	}
+}
+
 func (vm *VMap[kT, vT]) Make() {
 	vm.kv = make(map[kT]vT)
 }
