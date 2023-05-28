@@ -63,7 +63,10 @@ func (p *Part) download(ioff, foff int64, force bool) (slow bool, err error) {
 	}
 	header := req.Header
 	setUserAgent(header)
-	setRange(header, ioff, foff)
+	if foff != -1 {
+		setRange(header, ioff, foff)
+		force = true
+	}
 	resp, er := p.client.Do(req)
 	if er != nil {
 		err = er
@@ -81,14 +84,14 @@ func (p *Part) copyBuffer(src io.Reader, dst io.Writer, force bool) (slow bool, 
 	var n int
 	for {
 		n++
-		if n%10 == 0 {
+		if !force && n%10 == 0 {
 			te, err = getSpeed(func() error {
 				return p.copyBufferChunk(src, dst, buf)
 			})
 			if err != nil {
 				break
 			}
-			if !force && te > getDownloadTime(p.espeed, int64(p.chunk)) {
+			if te > getDownloadTime(p.espeed, int64(p.chunk)) {
 				slow = true
 				return
 			}
