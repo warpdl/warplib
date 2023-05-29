@@ -22,6 +22,7 @@ const (
 )
 
 const (
+	DEF_MAX_CONNS  = 1
 	DEF_CHUNK_SIZE = 32 * KB
 )
 

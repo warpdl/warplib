@@ -26,33 +26,48 @@ type Downloader struct {
 	// Size of 1 chunk of bytes to download during
 	// a single copy cycle
 	chunk int
-	// max connections and number of curr connections
+	// Max connections and number of curr connections
 	maxConn, numConn int
-	// max spawnable parts and number of curr parts
+	// Max spawnable parts and number of curr parts
 	maxParts, numParts int
-	// initial number of parts to be spawned
+	// Initial number of parts to be spawned
 	numBaseParts int
-	// setting force as 'true' will make downloader
+	// Setting force as 'true' will make downloader
 	// split the file into segments even if it doesn't
 	// have accept-ranges header.
 	force bool
 	// Handlers to be triggered while different events.
-	Handlers *Handlers
-	dlPath   string
-	wg       sync.WaitGroup
-	ohmap    VMap[int64, string]
+	handlers *Handlers
+
+	dlPath string
+	wg     sync.WaitGroup
+	ohmap  VMap[int64, string]
+}
+
+// Optional fields of downloader
+type DownloaderOpts struct {
+	ForceParts bool
+	Handlers   *Handlers
 }
 
 // NewDownloader creates a new downloader with provided arguments.
 // Use downloader.Start() to download the file.
-func NewDownloader(client *http.Client, url string, forceParts bool) (d *Downloader, err error) {
+func NewDownloader(client *http.Client, url string, opts *DownloaderOpts) (d *Downloader, err error) {
+	if opts == nil {
+		opts = &DownloaderOpts{}
+	}
+	if opts.Handlers == nil {
+		opts.Handlers = &Handlers{}
+	}
+	opts.Handlers.setDefault()
 	d = &Downloader{
-		wg:      sync.WaitGroup{},
-		client:  client,
-		url:     url,
-		maxConn: 1,
-		chunk:   int(DEF_CHUNK_SIZE),
-		force:   forceParts,
+		wg:       sync.WaitGroup{},
+		client:   client,
+		url:      url,
+		maxConn:  DEF_MAX_CONNS,
+		chunk:    int(DEF_CHUNK_SIZE),
+		force:    opts.ForceParts,
+		handlers: opts.Handlers,
 	}
 	err = d.fetchInfo()
 	if err != nil {
@@ -87,11 +102,18 @@ func (d *Downloader) handlePart(ioff, foff, espeed int64) {
 }
 
 func (d *Downloader) spawnPart(ioff, foff, espeed int64) (part *Part) {
-	part = newPart(d.client, d.url, d.chunk, d.dlPath, d.Handlers.ProgressHandler, d.Handlers.OnCompleteHandler)
+	part = newPart(
+		d.client,
+		d.url,
+		d.chunk,
+		d.dlPath,
+		d.handlers.ProgressHandler,
+		d.handlers.DownloadCompleteHandler,
+	)
 	part.offset = ioff
 	d.ohmap.Set(ioff, part.hash)
 	d.numParts++
-	d.Handlers.SpawnPartHandler(part.hash, ioff, foff)
+	d.handlers.SpawnPartHandler(part.hash, ioff, foff)
 	return
 }
 
@@ -109,7 +131,7 @@ func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64) {
 	// expected speed.
 	slow, err := part.download(ioff, foff, false)
 	if err != nil {
-		d.Handlers.ErrorHandler(err)
+		d.handlers.ErrorHandler(err)
 		return
 	}
 	if !slow {
@@ -126,7 +148,7 @@ func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64) {
 		// rest of the content in slow part.
 		_, err := part.download(poff, foff, true)
 		if err != nil {
-			d.Handlers.ErrorHandler(err)
+			d.handlers.ErrorHandler(err)
 			return
 		}
 	}
@@ -154,7 +176,7 @@ func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64) {
 	// current part will download the first half
 	// of pending bytes.
 	foff = poff + div - 1
-	d.Handlers.RespawnPartHandler(part.hash, poff, foff)
+	d.handlers.RespawnPartHandler(part.hash, poff, foff)
 	d.runPart(part, poff, foff, espeed/2)
 }
 

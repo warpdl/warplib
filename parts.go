@@ -24,7 +24,7 @@ type Part struct {
 	// progress handler
 	pfunc ProgressHandlerFunc
 	// dl compl handler
-	ofunc OnCompleteHandlerFunc
+	ofunc DownloadCompleteHandlerFunc
 	// http client
 	client *http.Client
 	// prename
@@ -37,7 +37,7 @@ type Part struct {
 	espeed int64
 }
 
-func newPart(client *http.Client, url string, copyChunk int, preName string, pHandler ProgressHandlerFunc, oHandler OnCompleteHandlerFunc) *Part {
+func newPart(client *http.Client, url string, copyChunk int, preName string, pHandler ProgressHandlerFunc, oHandler DownloadCompleteHandlerFunc) *Part {
 	p := Part{
 		url:     url,
 		client:  client,
