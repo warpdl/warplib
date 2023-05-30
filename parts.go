@@ -65,6 +65,7 @@ func (p *Part) download(ioff, foff int64, force bool) (slow bool, err error) {
 	setUserAgent(header)
 	if foff != -1 {
 		setRange(header, ioff, foff)
+	} else {
 		force = true
 	}
 	resp, er := p.client.Do(req)
