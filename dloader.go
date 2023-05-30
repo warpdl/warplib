@@ -192,6 +192,9 @@ func (d *Downloader) SetMaxConnections(n int) {
 // SetMaxParts sets the maximum number of file segments
 // to be created for the downloading the file.
 func (d *Downloader) SetMaxParts(n int) {
+	if n == 0 {
+		return
+	}
 	if d.numBaseParts > n {
 		d.numBaseParts = n
 	}
