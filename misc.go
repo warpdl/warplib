@@ -113,6 +113,13 @@ var ConfigDir = func() (warpDir string) {
 	if err != nil {
 		panic(err)
 	}
+	// weird stuff
+	if !dirExists(cdr) {
+		err = os.Mkdir(cdr, os.ModePerm)
+		if err != nil {
+			panic(err)
+		}
+	}
 	warpDir = cdr + "/warp"
 	if dirExists(warpDir) {
 		return
@@ -124,18 +131,18 @@ var ConfigDir = func() (warpDir string) {
 	return
 }()
 
-var CacheDir = func() (warpDir string) {
-	cdr, err := os.UserCacheDir()
-	if err != nil {
-		panic(err)
-	}
-	warpDir = cdr + "/warp"
-	if dirExists(warpDir) {
-		return
-	}
-	err = os.Mkdir(warpDir, os.ModePerm)
-	if err != nil {
-		panic(err)
-	}
-	return
-}()
+// var CacheDir = func() (warpDir string) {
+// 	cdr, err := os.UserCacheDir()
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	warpDir = cdr + "/warp"
+// 	if dirExists(warpDir) {
+// 		return
+// 	}
+// 	err = os.Mkdir(warpDir, os.ModePerm)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	return
+// }()
