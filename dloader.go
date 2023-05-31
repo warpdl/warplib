@@ -3,6 +3,7 @@ package warplib
 import (
 	"fmt"
 	"io"
+	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -42,12 +43,15 @@ type Downloader struct {
 	dlPath string
 	wg     sync.WaitGroup
 	ohmap  VMap[int64, string]
+	l      *log.Logger
+	lw     io.WriteCloser
 }
 
 // Optional fields of downloader
 type DownloaderOpts struct {
-	ForceParts bool
-	Handlers   *Handlers
+	ForceParts   bool
+	Handlers     *Handlers
+	NumBaseParts int
 }
 
 // NewDownloader creates a new downloader with provided arguments.
@@ -59,7 +63,6 @@ func NewDownloader(client *http.Client, url string, opts *DownloaderOpts) (d *Do
 	if opts.Handlers == nil {
 		opts.Handlers = &Handlers{}
 	}
-	opts.Handlers.setDefault()
 	d = &Downloader{
 		wg:       sync.WaitGroup{},
 		client:   client,
@@ -73,12 +76,25 @@ func NewDownloader(client *http.Client, url string, opts *DownloaderOpts) (d *Do
 	if err != nil {
 		return
 	}
-	return d, d.setupDlPath()
+	err = d.setupDlPath()
+	if err != nil {
+		return
+	}
+	err = d.setupLogger()
+	if err != nil {
+		return
+	}
+	d.handlers.setDefault(d.l)
+	if opts.NumBaseParts != 0 {
+		d.numBaseParts = opts.NumBaseParts
+	}
+	return
 }
 
 // Start downloads the file and blocks current goroutine
 // until the downloading is complete.
 func (d *Downloader) Start() (err error) {
+	d.Log("Starting download...")
 	d.ohmap.Make()
 	partSize, rpartSize := d.getPartSize()
 	for i := 0; i < d.numBaseParts; i++ {
@@ -91,28 +107,35 @@ func (d *Downloader) Start() (err error) {
 		go d.handlePart(ioff, foff, 4*MB)
 	}
 	d.wg.Wait()
-	return d.compile()
+	d.handlers.DownloadCompleteHandler("main", d.contentLength.v())
+	d.Log("All segments downloaded!\nCompiling...")
+	err = d.compile()
+	return
 }
 
 func (d *Downloader) handlePart(ioff, foff, espeed int64) {
 	d.numConn++
-	part := d.spawnPart(ioff, foff, espeed)
+	part := d.spawnPart(ioff, foff)
 	defer func() { d.numConn--; part.close(); d.wg.Done() }()
-	d.runPart(part, ioff, foff, espeed)
+	d.runPart(part, ioff, foff, espeed, false)
 }
 
-func (d *Downloader) spawnPart(ioff, foff, espeed int64) (part *Part) {
+func (d *Downloader) spawnPart(ioff, foff int64) (part *Part) {
 	part = newPart(
 		d.client,
 		d.url,
-		d.chunk,
-		d.dlPath,
-		d.handlers.ProgressHandler,
-		d.handlers.DownloadCompleteHandler,
+		partArgs{
+			d.chunk,
+			d.dlPath,
+			d.handlers.ProgressHandler,
+			d.handlers.DownloadCompleteHandler,
+			d.l,
+		},
 	)
 	part.offset = ioff
 	d.ohmap.Set(ioff, part.hash)
 	d.numParts++
+	d.Log("%s: Created new part", part.hash)
 	d.handlers.SpawnPartHandler(part.hash, ioff, foff)
 	return
 }
@@ -121,22 +144,28 @@ func (d *Downloader) spawnPart(ioff, foff, espeed int64) (part *Part) {
 // offset. espeed stands for expected download speed which, slower
 // download speed than this espeed will result in spawning a new part
 // if a slot is available for it and maximum parts limit is not reached.
-func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64) {
+func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64, repeated bool) {
+	hash := part.hash
 	// set espeed each time the runPart function is called to update
 	// the older espeed present in respawned parts.
 	part.setEpeed(espeed)
+	if !repeated {
+		d.Log("%s: Set part espeed to %s", hash, ContentLength(espeed))
+		d.Log("%s: Started downloading part", hash)
+	}
 
 	// start downloading the content in provided
 	// offset range until part becomes slower than
 	// expected speed.
 	slow, err := part.download(ioff, foff, false)
 	if err != nil {
-		d.handlers.ErrorHandler(err)
+		d.handlers.ErrorHandler(hash, err)
 		return
 	}
 	if !slow {
 		return
 	}
+	d.Log("%s: Detected part as running slow", hash)
 
 	// add read bytes to part offset to determine
 	// starting offset for a resplit download.
@@ -146,9 +175,10 @@ func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64) {
 		// Max part limit has been reached and hence
 		// don't spawn new parts and forcefully download
 		// rest of the content in slow part.
+		d.Log("%s: Max part limit reached, continuing slow part...", hash)
 		_, err := part.download(poff, foff, true)
 		if err != nil {
-			d.handlers.ErrorHandler(err)
+			d.handlers.ErrorHandler(hash, err)
 			return
 		}
 	}
@@ -158,7 +188,7 @@ func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64) {
 		// a slot is available.
 		// Part is continued if the speed gets
 		// better before it gets a new slot.
-		d.runPart(part, poff, foff, espeed)
+		d.runPart(part, poff, foff, espeed, true)
 		return
 	}
 
@@ -176,8 +206,10 @@ func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64) {
 	// current part will download the first half
 	// of pending bytes.
 	foff = poff + div - 1
-	d.handlers.RespawnPartHandler(part.hash, poff, foff)
-	d.runPart(part, poff, foff, espeed/2)
+
+	d.Log("%s: part respawned", hash)
+	d.handlers.RespawnPartHandler(hash, poff, foff)
+	d.runPart(part, poff, foff, espeed/2, false)
 }
 
 // SetMaxConnections sets the maximum number of parallel
@@ -201,7 +233,11 @@ func (d *Downloader) SetMaxParts(n int) {
 // SetDownloadLocation sets the download directory for
 // file to be downloaded.
 func (d *Downloader) SetDownloadLocation(loc string) {
-	d.dlLoc = strings.TrimSuffix(loc, "/")
+	loc = strings.TrimSuffix(loc, "/")
+	if loc == "" {
+		return
+	}
+	d.dlLoc = loc
 }
 
 // SetFileName is used to set name of to-be-downloaded
@@ -236,6 +272,12 @@ func (d *Downloader) GetContentLengthAsString() string {
 // running currently.
 func (d *Downloader) NumConnections() int {
 	return d.numBaseParts
+}
+
+// Log adds the provided string to download's log file.
+// It can't be used once download is complete.
+func (d *Downloader) Log(s string, a ...any) {
+	d.l.Printf(s+"\n", a...)
 }
 
 func (d *Downloader) getPartSize() (partSize, rpartSize int64) {
@@ -276,6 +318,15 @@ func (d *Downloader) setupDlPath() (err error) {
 		return
 	}
 	d.dlPath = dlpath
+	return
+}
+
+func (d *Downloader) setupLogger() (err error) {
+	d.lw, err = os.Create(d.dlPath + "logs.txt")
+	if err != nil {
+		return
+	}
+	d.l = log.New(d.lw, "", log.LstdFlags)
 	return
 }
 
@@ -385,19 +436,21 @@ func (d *Downloader) prepareDownloader() (err error) {
 }
 
 func (d *Downloader) compile() (err error) {
+	d.handlers.CompileStartHandler()
 	if d.dlLoc == "" {
 		d.dlLoc = "."
 	}
 	svPath := strings.Join([]string{d.dlLoc, d.fileName}, "/")
-	file, ef := os.Create(svPath)
-	if ef != nil {
-		err = ef
-	}
 	offsets := d.ohmap.Keys()
 	if len(offsets) == 1 {
 		hash := d.ohmap.GetUnsafe(offsets[0])
 		fName := getFileName(d.dlPath, hash)
 		err = os.Rename(fName, svPath)
+		return
+	}
+	file, ef := os.Create(svPath)
+	if ef != nil {
+		err = ef
 		return
 	}
 	sortInt64s(offsets)
@@ -412,11 +465,19 @@ func (d *Downloader) compile() (err error) {
 			err = ef
 			return
 		}
-		_, err = io.Copy(file, f)
+		_, err = io.Copy(file, NewProxyReader(f, d.handlers.CompileProgressHandler))
 		if err != nil {
 			return
 		}
-		defer os.Remove(fName)
+		defer func() {
+			er := os.Remove(fName)
+			if er != nil {
+				d.Log("Failed to remove part %s: %w", hash, er)
+			}
+		}()
 	}
+	d.Log("Compilation complete!")
+	err = d.lw.Close()
+	d.handlers.CompileCompleteHandler()
 	return
 }

@@ -72,7 +72,7 @@ func getDownloadTime(sps int64, tdb int64) (eta time.Duration) {
 }
 
 func getFileName(preName, hash string) string {
-	return fmt.Sprintf("%s_%s.warp", preName, hash)
+	return fmt.Sprintf("%s%s.warp", preName, hash)
 }
 
 func dirExists(name string) bool {
@@ -93,20 +93,20 @@ func Place[t any](src []t, e t, index int) (dst []t) {
 	return
 }
 
-type duration struct {
-	t time.Duration
-	n int64
-}
+// type duration struct {
+// 	t time.Duration
+// 	n int64
+// }
 
-func (d *duration) avg(t time.Duration) {
-	d.n++
-	d.t = time.Duration(int64(d.t+t) / d.n)
-}
+// func (d *duration) avg(t time.Duration) {
+// 	d.n++
+// 	d.t = time.Duration(int64(d.t+t) / d.n)
+// }
 
-func (d *duration) get() (avg time.Duration) {
-	avg = d.t
-	return
-}
+// func (d *duration) get() (avg time.Duration) {
+// 	avg = d.t
+// 	return
+// }
 
 var ConfigDir = func() (warpDir string) {
 	cdr, err := os.UserConfigDir()

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -35,16 +36,27 @@ type Part struct {
 	offset int64
 	// expected speed
 	espeed int64
+	// logger
+	l *log.Logger
 }
 
-func newPart(client *http.Client, url string, copyChunk int, preName string, pHandler ProgressHandlerFunc, oHandler DownloadCompleteHandlerFunc) *Part {
+type partArgs struct {
+	copyChunk int
+	preName   string
+	pHandler  ProgressHandlerFunc
+	oHandler  DownloadCompleteHandlerFunc
+	logger    *log.Logger
+}
+
+func newPart(client *http.Client, url string, args partArgs) *Part {
 	p := Part{
 		url:     url,
 		client:  client,
-		chunk:   copyChunk,
-		preName: preName,
-		pfunc:   pHandler,
-		ofunc:   oHandler,
+		chunk:   args.copyChunk,
+		preName: args.preName,
+		pfunc:   args.pHandler,
+		ofunc:   args.oHandler,
+		l:       args.logger,
 	}
 	p.setHash()
 	p.createPartFile()
@@ -105,6 +117,7 @@ func (p *Part) copyBuffer(src io.Reader, dst io.Writer, force bool) (slow bool, 
 	}
 	if err == io.EOF {
 		err = nil
+		p.log("%s: part download complete", p.hash)
 		go p.ofunc(p.hash, p.read)
 	}
 	return
@@ -166,6 +179,10 @@ func (p *Part) getFileName() string {
 
 func (p *Part) close() error {
 	return p.f.Close()
+}
+
+func (p *Part) log(s string, a ...any) {
+	p.l.Printf(s+"\n", a...)
 }
 
 func (p *Part) String() string {

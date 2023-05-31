@@ -8,10 +8,6 @@ func (c ContentLength) v() (clen int64) {
 	return int64(c)
 }
 
-func (c ContentLength) vshort() (clen int) {
-	return int(c)
-}
-
 func (c ContentLength) String() (clen string) {
 	return c.Format(
 		" ",

@@ -3,11 +3,14 @@ package warplib
 import "log"
 
 type (
-	ErrorHandlerFunc            func(err error)
+	ErrorHandlerFunc            func(hash string, err error)
 	SpawnPartHandlerFunc        func(hash string, ioff, foff int64)
 	RespawnPartHandlerFunc      func(hash string, ioffNew, foffNew int64)
 	ProgressHandlerFunc         func(hash string, nread int)
 	DownloadCompleteHandlerFunc func(hash string, tread int64)
+	CompileStartHandlerFunc     func()
+	CompileProgressHandlerFunc  func(nread int)
+	CompileCompleteHandlerFunc  func()
 )
 
 type Handlers struct {
@@ -16,9 +19,12 @@ type Handlers struct {
 	ProgressHandler         ProgressHandlerFunc
 	ErrorHandler            ErrorHandlerFunc
 	DownloadCompleteHandler DownloadCompleteHandlerFunc
+	CompileStartHandler     CompileStartHandlerFunc
+	CompileProgressHandler  CompileProgressHandlerFunc
+	CompileCompleteHandler  CompileCompleteHandlerFunc
 }
 
-func (h *Handlers) setDefault() {
+func (h *Handlers) setDefault(l *log.Logger) {
 	if h.SpawnPartHandler == nil {
 		h.SpawnPartHandler = func(hash string, ioff, foff int64) {}
 	}
@@ -31,9 +37,18 @@ func (h *Handlers) setDefault() {
 	if h.DownloadCompleteHandler == nil {
 		h.DownloadCompleteHandler = func(hash string, tread int64) {}
 	}
+	if h.CompileStartHandler == nil {
+		h.CompileStartHandler = func() {}
+	}
+	if h.CompileProgressHandler == nil {
+		h.CompileProgressHandler = func(nread int) {}
+	}
+	if h.CompileCompleteHandler == nil {
+		h.CompileCompleteHandler = func() {}
+	}
 	if h.ErrorHandler == nil {
-		h.ErrorHandler = func(err error) {
-			log.Println(err)
+		h.ErrorHandler = func(hash string, err error) {
+			l.Printf("%s: %s\n", hash, err.Error())
 		}
 	}
 }
