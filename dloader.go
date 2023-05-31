@@ -108,7 +108,8 @@ func (d *Downloader) Start() (err error) {
 	}
 	d.wg.Wait()
 	d.handlers.DownloadCompleteHandler("main", d.contentLength.v())
-	d.Log("All segments downloaded!\nCompiling...")
+	d.Log("All segments downloaded!")
+	d.Log("Compiling segments...")
 	err = d.compile()
 	return
 }
@@ -254,6 +255,10 @@ func (d *Downloader) SetFileName(name string) {
 
 func (d *Downloader) GetFileName() string {
 	return d.fileName
+}
+
+func (d *Downloader) GetDownloadDirectory() string {
+	return d.dlLoc
 }
 
 func (d *Downloader) GetContentLength() ContentLength {
