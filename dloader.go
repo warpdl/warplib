@@ -39,6 +39,8 @@ type Downloader struct {
 	force bool
 	// Handlers to be triggered while different events.
 	handlers *Handlers
+	// unique hash of this download
+	hash string
 
 	dlPath string
 	wg     sync.WaitGroup
@@ -49,9 +51,13 @@ type Downloader struct {
 
 // Optional fields of downloader
 type DownloaderOpts struct {
-	ForceParts   bool
-	Handlers     *Handlers
-	NumBaseParts int
+	ForceParts        bool
+	Handlers          *Handlers
+	FileName          string
+	DownloadDirectory string
+	NumBaseParts      int
+	MaxConnections    int
+	MaxSegments       int
 }
 
 // NewDownloader creates a new downloader with provided arguments.
@@ -63,19 +69,32 @@ func NewDownloader(client *http.Client, url string, opts *DownloaderOpts) (d *Do
 	if opts.Handlers == nil {
 		opts.Handlers = &Handlers{}
 	}
+	if opts.MaxConnections == 0 {
+		opts.MaxConnections = DEF_MAX_CONNS
+	}
+	loc := opts.DownloadDirectory
+	loc = strings.TrimSuffix(loc, "/")
+	if loc == "" {
+		loc = "."
+	}
+	opts.DownloadDirectory = loc
 	d = &Downloader{
 		wg:       sync.WaitGroup{},
 		client:   client,
 		url:      url,
-		maxConn:  DEF_MAX_CONNS,
+		maxConn:  opts.MaxConnections,
 		chunk:    int(DEF_CHUNK_SIZE),
 		force:    opts.ForceParts,
 		handlers: opts.Handlers,
+		fileName: opts.FileName,
+		dlLoc:    opts.DownloadDirectory,
+		maxParts: opts.MaxSegments,
 	}
 	err = d.fetchInfo()
 	if err != nil {
 		return
 	}
+	d.setHash()
 	err = d.setupDlPath()
 	if err != nil {
 		return
@@ -87,6 +106,15 @@ func NewDownloader(client *http.Client, url string, opts *DownloaderOpts) (d *Do
 	d.handlers.setDefault(d.l)
 	if opts.NumBaseParts != 0 {
 		d.numBaseParts = opts.NumBaseParts
+	}
+	if d.maxParts != 0 && d.maxConn > d.maxParts {
+		d.maxConn = d.maxParts
+	}
+	if d.numBaseParts > d.maxConn {
+		d.numBaseParts = d.maxConn
+	}
+	if d.maxParts != 0 && d.numBaseParts > d.maxParts {
+		d.numBaseParts = d.maxParts
 	}
 	return
 }
@@ -215,43 +243,18 @@ func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64, repeated bool
 
 // SetMaxConnections sets the maximum number of parallel
 // network connections to be used for the downloading the file.
-func (d *Downloader) SetMaxConnections(n int) {
-	if n != 0 && d.numBaseParts > n {
-		d.numBaseParts = n
-	}
-	d.maxConn = n
-}
 
 // SetMaxParts sets the maximum number of file segments
 // to be created for the downloading the file.
-func (d *Downloader) SetMaxParts(n int) {
-	if n != 0 && d.numBaseParts > n {
-		d.numBaseParts = n
-	}
-	d.maxParts = n
-}
 
 // SetDownloadLocation sets the download directory for
 // file to be downloaded.
-func (d *Downloader) SetDownloadLocation(loc string) {
-	loc = strings.TrimSuffix(loc, "/")
-	if loc == "" {
-		return
-	}
-	d.dlLoc = loc
-}
 
 // SetFileName is used to set name of to-be-downloaded
 // file explicitly.
 //
 // Note: Warplib sets the file name sent by server
 // if file name not set explicitly.
-func (d *Downloader) SetFileName(name string) {
-	if name == "" {
-		return
-	}
-	d.fileName = name
-}
 
 func (d *Downloader) GetFileName() string {
 	return d.fileName
@@ -276,7 +279,7 @@ func (d *Downloader) GetContentLengthAsString() string {
 // NumConnections returns the number of connections
 // running currently.
 func (d *Downloader) NumConnections() int {
-	return d.numBaseParts
+	return d.numConn
 }
 
 // Log adds the provided string to download's log file.
@@ -309,14 +312,21 @@ func (d *Downloader) setContentLength(cl int64) error {
 }
 
 func (d *Downloader) setFileName(r *http.Request, h *http.Header) {
+	if d.fileName != "" {
+		return
+	}
 	cd := h.Get("Content-Disposition")
 	d.fileName = parseFileName(r, cd)
 }
 
-func (d *Downloader) setupDlPath() (err error) {
+func (d *Downloader) setHash() {
 	tstamp := time.Now().UnixNano()
+	d.hash = fmt.Sprintf("%s_%d", d.fileName, tstamp)
+}
+
+func (d *Downloader) setupDlPath() (err error) {
 	dlpath := fmt.Sprintf(
-		"%s/%s_%d/", ConfigDir, d.fileName, tstamp,
+		"%s/%s/", DlDataDir, d.hash,
 	)
 	err = os.Mkdir(dlpath, os.ModePerm)
 	if err != nil {
@@ -442,9 +452,6 @@ func (d *Downloader) prepareDownloader() (err error) {
 
 func (d *Downloader) compile() (err error) {
 	d.handlers.CompileStartHandler()
-	if d.dlLoc == "" {
-		d.dlLoc = "."
-	}
 	svPath := strings.Join([]string{d.dlLoc, d.fileName}, "/")
 	offsets := d.ohmap.Keys()
 	if len(offsets) == 1 {

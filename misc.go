@@ -131,6 +131,18 @@ var ConfigDir = func() (warpDir string) {
 	return
 }()
 
+var DlDataDir = func() (dlDir string) {
+	dlDir = ConfigDir + "/dldata"
+	if dirExists(dlDir) {
+		return
+	}
+	err := os.Mkdir(dlDir, os.ModePerm)
+	if err != nil {
+		panic(err)
+	}
+	return
+}()
+
 // var CacheDir = func() (warpDir string) {
 // 	cdr, err := os.UserCacheDir()
 // 	if err != nil {

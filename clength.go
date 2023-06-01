@@ -9,13 +9,17 @@ func (c ContentLength) v() (clen int64) {
 }
 
 func (c ContentLength) String() (clen string) {
-	return c.Format(
+	clen = c.Format(
 		" ",
 		SizeOptionTB,
 		SizeOptionGB,
 		SizeOptionMB,
 		SizeOptionKB,
 	)
+	if clen == "" {
+		clen = "undefined"
+	}
+	return
 }
 
 func (c ContentLength) Format(sep string, sizeOpts ...SizeOption) (clen string) {
