@@ -2,6 +2,7 @@ package warplib
 
 import (
 	"encoding/gob"
+	"io"
 	"os"
 	"sync"
 )
@@ -47,7 +48,10 @@ func InitManager() (m *Manager, err error) {
 		m = nil
 		return
 	}
-	_ = gob.NewDecoder(m.f).Decode(&m.items)
+	err = gob.NewDecoder(m.f).Decode(&m.items)
+	if err == io.EOF {
+		err = nil
+	}
 	return
 }
 
