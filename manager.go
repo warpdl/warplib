@@ -72,6 +72,12 @@ func (m *Manager) AddDownload(d *Downloader, opts *AddDownloadOpts) {
 		m.UpdateItem(item)
 		oPH(hash, nread)
 	}
+	oCCH := d.handlers.CompileCompleteHandler
+	d.handlers.CompileCompleteHandler = func() {
+		item.Parts = nil
+		m.UpdateItem(item)
+		oCCH()
+	}
 }
 
 func (m *Manager) encode(e any) (err error) {
