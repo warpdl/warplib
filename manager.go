@@ -13,6 +13,25 @@ type Manager struct {
 	mu    *sync.RWMutex
 }
 
+func InitManager() (m *Manager, err error) {
+	m = &Manager{
+		items: make(ItemsMap),
+		mu:    new(sync.RWMutex),
+	}
+	fn := ConfigDir + "/userdata.warp"
+	m.f, err = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, os.ModePerm)
+	if err != nil {
+		m = nil
+		return
+	}
+
+	err = gob.NewDecoder(m.f).Decode(&m.items)
+	if err == io.EOF {
+		err = nil
+	}
+	return
+}
+
 type AddDownloadOpts struct {
 	IsHidden   bool
 	IsChildren bool
@@ -44,37 +63,20 @@ func (m *Manager) AddDownload(d *Downloader, opts *AddDownloadOpts) {
 	oSPH := d.handlers.SpawnPartHandler
 	d.handlers.SpawnPartHandler = func(hash string, ioff, foff int64) {
 		item.addPart(ioff, hash)
-		defer m.UpdateItem(item)
+		m.UpdateItem(item)
 		oSPH(hash, ioff, foff)
 	}
 	oPH := d.handlers.ProgressHandler
 	d.handlers.ProgressHandler = func(hash string, nread int) {
 		item.Downloaded += ContentLength(nread)
-		defer m.UpdateItem(item)
+		m.UpdateItem(item)
 		oPH(hash, nread)
 	}
 }
 
-func InitManager() (m *Manager, err error) {
-	m = &Manager{
-		items: make(ItemsMap),
-		mu:    new(sync.RWMutex),
-	}
-	fn := ConfigDir + "/userdata.warp"
-	m.f, err = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, os.ModePerm)
-	if err != nil {
-		m = nil
-		return
-	}
-	err = gob.NewDecoder(m.f).Decode(&m.items)
-	if err == io.EOF {
-		err = nil
-	}
-	return
-}
-
 func (m *Manager) encode(e any) (err error) {
 	m.mu.Lock()
+	m.f.Seek(0, 0)
 	defer m.mu.Unlock()
 	return gob.NewEncoder(m.f).Encode(e)
 }
