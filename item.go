@@ -1,26 +1,36 @@
 package warplib
 
 import (
-	"strings"
 	"sync"
 	"time"
 )
 
 type Item struct {
+	Hash             string
 	Name             string
 	Url              string
 	DateAdded        time.Time
 	TotalSize        ContentLength
 	Downloaded       ContentLength
 	DownloadLocation string
-	Hash             string
+	ChildHash        string
+	Hidden           bool
+	Children         bool
 	Parts            map[int64]string
 	mu               *sync.RWMutex
 }
 
 type ItemsMap map[string]*Item
 
-func newItem(name, url, dlloc, hash string, totalSize ContentLength, mu *sync.RWMutex) *Item {
+type ItemOpts struct {
+	Hide, Child bool
+	ChildHash   string
+}
+
+func newItem(mu *sync.RWMutex, name, url, dlloc, hash string, totalSize ContentLength, opts *ItemOpts) *Item {
+	if opts == nil {
+		opts = &ItemOpts{}
+	}
 	return &Item{
 		Name:      name,
 		Url:       url,
@@ -28,6 +38,9 @@ func newItem(name, url, dlloc, hash string, totalSize ContentLength, mu *sync.RW
 		TotalSize: totalSize,
 		Parts:     make(map[int64]string),
 		DateAdded: time.Now(),
+		Hidden:    opts.Hide,
+		Children:  opts.Child,
+		ChildHash: opts.ChildHash,
 		mu:        mu,
 	}
 }
@@ -43,12 +56,7 @@ func (i *Item) GetPercentage() int64 {
 	return p.v()
 }
 
-func (i *Item) GetSaveLocation() string {
-	svPath := strings.Join(
-		[]string{
-			i.DownloadLocation, i.Name,
-		},
-		"/",
-	)
-	return svPath
+func (i *Item) GetSavePath() (svPath string) {
+	svPath = GetPath(i.DownloadLocation, i.Name)
+	return
 }

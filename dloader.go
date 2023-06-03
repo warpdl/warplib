@@ -264,6 +264,11 @@ func (d *Downloader) GetDownloadDirectory() string {
 	return d.dlLoc
 }
 
+func (d *Downloader) GetSavePath() (svPath string) {
+	svPath = GetPath(d.dlLoc, d.fileName)
+	return
+}
+
 func (d *Downloader) GetContentLength() ContentLength {
 	return d.contentLength
 }

@@ -26,6 +26,16 @@ const (
 	DEF_CHUNK_SIZE = 32 * KB
 )
 
+func GetPath(directory, file string) (path string) {
+	path = strings.Join(
+		[]string{
+			directory, file,
+		},
+		"/",
+	)
+	return
+}
+
 func getSpeed(op func() error) (te time.Duration, err error) {
 	tn := time.Now()
 	err = op()

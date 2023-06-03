@@ -13,14 +13,32 @@ type Manager struct {
 	mu    *sync.RWMutex
 }
 
-func (m *Manager) AddDownload(d *Downloader) {
+type AddDownloadOpts struct {
+	IsHidden   bool
+	IsChildren bool
+	Child      *Downloader
+}
+
+func (m *Manager) AddDownload(d *Downloader, opts *AddDownloadOpts) {
+	if opts == nil {
+		opts = &AddDownloadOpts{}
+	}
+	cHash := ""
+	if opts.Child != nil {
+		cHash = opts.Child.hash
+	}
 	item := newItem(
+		m.mu,
 		d.fileName,
 		d.url,
 		d.dlLoc,
 		d.hash,
 		d.contentLength,
-		m.mu,
+		&ItemOpts{
+			Child:     opts.IsChildren,
+			Hide:      opts.IsHidden,
+			ChildHash: cHash,
+		},
 	)
 	m.UpdateItem(item)
 	oSPH := d.handlers.SpawnPartHandler
