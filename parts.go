@@ -46,9 +46,10 @@ type partArgs struct {
 	pHandler  ProgressHandlerFunc
 	oHandler  DownloadCompleteHandlerFunc
 	logger    *log.Logger
+	offset    int64
 }
 
-func newPart(client *http.Client, url string, args partArgs) *Part {
+func initPart(client *http.Client, hash, url string, args partArgs) (*Part, error) {
 	p := Part{
 		url:     url,
 		client:  client,
@@ -57,10 +58,33 @@ func newPart(client *http.Client, url string, args partArgs) *Part {
 		pfunc:   args.pHandler,
 		ofunc:   args.oHandler,
 		l:       args.logger,
+		offset:  args.offset,
+		hash:    hash,
+	}
+	err := p.openPartFile()
+	if err != nil {
+		return nil, err
+	}
+	err = p.seek()
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func newPart(client *http.Client, url string, args partArgs) (*Part, error) {
+	p := Part{
+		url:     url,
+		client:  client,
+		chunk:   args.copyChunk,
+		preName: args.preName,
+		pfunc:   args.pHandler,
+		ofunc:   args.oHandler,
+		l:       args.logger,
+		offset:  args.offset,
 	}
 	p.setHash()
-	p.createPartFile()
-	return &p
+	return &p, p.createPartFile()
 }
 
 func (p *Part) setEpeed(espeed int64) {
@@ -170,6 +194,23 @@ func (p *Part) setHash() {
 
 func (p *Part) createPartFile() (err error) {
 	p.f, err = os.Create(p.getFileName())
+	return
+}
+
+func (p *Part) openPartFile() (err error) {
+	p.f, err = os.OpenFile(p.getFileName(), os.O_RDWR, 0666)
+	return
+}
+
+func (p *Part) seek() (err error) {
+	pReader := NewProxyReader(p.f, func(n int) {
+		p.pfunc(p.hash, n)
+	})
+	n, err := io.Copy(io.Discard, pReader)
+	if err != nil {
+		return
+	}
+	p.read = n
 	return
 }
 

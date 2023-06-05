@@ -3,6 +3,7 @@ package warplib
 import (
 	"encoding/gob"
 	"io"
+	"net/http"
 	"os"
 	"sync"
 )
@@ -60,11 +61,18 @@ func (m *Manager) AddDownload(d *Downloader, opts *AddDownloadOpts) {
 		},
 	)
 	m.UpdateItem(item)
+
 	oSPH := d.handlers.SpawnPartHandler
 	d.handlers.SpawnPartHandler = func(hash string, ioff, foff int64) {
-		item.addPart(ioff, hash)
+		item.addPart(hash, ioff, foff)
 		m.UpdateItem(item)
 		oSPH(hash, ioff, foff)
+	}
+	oRPH := d.handlers.RespawnPartHandler
+	d.handlers.RespawnPartHandler = func(hash string, partIoff, ioffNew, foffNew int64) {
+		item.addPart(hash, partIoff, foffNew)
+		m.UpdateItem(item)
+		oRPH(hash, partIoff, ioffNew, foffNew)
 	}
 	oPH := d.handlers.ProgressHandler
 	d.handlers.ProgressHandler = func(hash string, nread int) {
@@ -98,14 +106,69 @@ func (m *Manager) UpdateItem(item *Item) {
 	m.encode(m.items)
 }
 
-func (m *Manager) GetItems() ItemsMap {
-	return m.items
+func (m *Manager) GetItems() []*Item {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	items := make([]*Item, len(m.items))
+	var i int
+	for _, item := range m.items {
+		items[i] = item
+		i++
+	}
+	return items
+}
+
+func (m *Manager) GetIncompleteItems() []*Item {
+	var items = []*Item{}
+	for _, item := range m.GetItems() {
+		if item.TotalSize == item.Downloaded {
+			continue
+		}
+		items = append(items, item)
+	}
+	return items
 }
 
 func (m *Manager) GetItem(hash string) (item *Item) {
 	m.mu.RLock()
 	item = m.items[hash]
 	m.mu.RUnlock()
+	return
+}
+
+type ResumeDownloadOpts struct {
+	ForceParts bool
+	// MaxConnections sets the maximum number of parallel
+	// network connections to be used for the downloading the file.
+	MaxConnections int
+	// MaxSegments sets the maximum number of file segments
+	// to be created for the downloading the file.
+	MaxSegments int
+	Handlers    *Handlers
+}
+
+func (m *Manager) ResumeDownload(client *http.Client, hash string, opts *ResumeDownloadOpts) (item *Item, err error) {
+	if opts == nil {
+		opts = &ResumeDownloadOpts{}
+	}
+	item = m.GetItem(hash)
+	if item == nil {
+		err = ErrDownloadNotFound
+		return
+	}
+	d, er := initDownloader(client, hash, item.Url, item.TotalSize, &DownloaderOpts{
+		ForceParts:        opts.ForceParts,
+		MaxConnections:    opts.MaxConnections,
+		MaxSegments:       opts.MaxSegments,
+		Handlers:          opts.Handlers,
+		FileName:          item.Name,
+		DownloadDirectory: item.DownloadLocation,
+	})
+	if er != nil {
+		err = er
+		return
+	}
+	item.dAlloc = d
 	return
 }
 

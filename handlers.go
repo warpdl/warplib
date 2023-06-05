@@ -5,7 +5,7 @@ import "log"
 type (
 	ErrorHandlerFunc            func(hash string, err error)
 	SpawnPartHandlerFunc        func(hash string, ioff, foff int64)
-	RespawnPartHandlerFunc      func(hash string, ioffNew, foffNew int64)
+	RespawnPartHandlerFunc      func(hash string, partIoff, ioffNew, foffNew int64)
 	ProgressHandlerFunc         func(hash string, nread int)
 	DownloadCompleteHandlerFunc func(hash string, tread int64)
 	CompileStartHandlerFunc     func()
@@ -29,7 +29,7 @@ func (h *Handlers) setDefault(l *log.Logger) {
 		h.SpawnPartHandler = func(hash string, ioff, foff int64) {}
 	}
 	if h.RespawnPartHandler == nil {
-		h.RespawnPartHandler = func(hash string, ioffNew, foffNew int64) {}
+		h.RespawnPartHandler = func(hash string, partIoff, ioffNew, foffNew int64) {}
 	}
 	if h.ProgressHandler == nil {
 		h.ProgressHandler = func(hash string, nread int) {}

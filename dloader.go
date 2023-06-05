@@ -1,6 +1,7 @@
 package warplib
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -51,13 +52,24 @@ type Downloader struct {
 
 // Optional fields of downloader
 type DownloaderOpts struct {
-	ForceParts        bool
-	Handlers          *Handlers
-	FileName          string
+	ForceParts   bool
+	NumBaseParts int
+	// FileName is used to set name of to-be-downloaded
+	// file explicitly.
+	//
+	// Note: Warplib sets the file name sent by server
+	// if file name not set explicitly.
+	FileName string
+	// DownloadDirectory sets the download directory for
+	// file to be downloaded.
 	DownloadDirectory string
-	NumBaseParts      int
-	MaxConnections    int
-	MaxSegments       int
+	// MaxConnections sets the maximum number of parallel
+	// network connections to be used for the downloading the file.
+	MaxConnections int
+	// MaxSegments sets the maximum number of file segments
+	// to be created for the downloading the file.
+	MaxSegments int
+	Handlers    *Handlers
 }
 
 // NewDownloader creates a new downloader with provided arguments.
@@ -119,6 +131,52 @@ func NewDownloader(client *http.Client, url string, opts *DownloaderOpts) (d *Do
 	return
 }
 
+func initDownloader(client *http.Client, hash, url string, cLength ContentLength, opts *DownloaderOpts) (d *Downloader, err error) {
+	if opts == nil {
+		opts = &DownloaderOpts{}
+	}
+	if opts.Handlers == nil {
+		opts.Handlers = &Handlers{}
+	}
+	if opts.MaxConnections == 0 {
+		opts.MaxConnections = DEF_MAX_CONNS
+	}
+	loc := opts.DownloadDirectory
+	loc = strings.TrimSuffix(loc, "/")
+	if loc == "" {
+		loc = "."
+	}
+	opts.DownloadDirectory = loc
+	d = &Downloader{
+		wg:            sync.WaitGroup{},
+		client:        client,
+		url:           url,
+		maxConn:       opts.MaxConnections,
+		chunk:         int(DEF_CHUNK_SIZE),
+		force:         opts.ForceParts,
+		handlers:      opts.Handlers,
+		fileName:      opts.FileName,
+		dlLoc:         opts.DownloadDirectory,
+		maxParts:      opts.MaxSegments,
+		contentLength: cLength,
+		hash:          hash,
+		dlPath:        fmt.Sprintf("%s/%s/", DlDataDir, hash),
+	}
+	if !dirExists(d.dlPath) {
+		err = errors.New("path to downloaded content doesn't exist")
+		return
+	}
+	err = d.setupLogger()
+	if err != nil {
+		return
+	}
+	d.handlers.setDefault(d.l)
+	if d.maxParts != 0 && d.maxConn > d.maxParts {
+		d.maxConn = d.maxParts
+	}
+	return
+}
+
 // Start downloads the file and blocks current goroutine
 // until the downloading is complete.
 func (d *Downloader) Start() (err error) {
@@ -132,7 +190,7 @@ func (d *Downloader) Start() (err error) {
 			foff += rpartSize
 		}
 		d.wg.Add(1)
-		go d.handlePart(ioff, foff, 4*MB)
+		go d.newPartDownload(ioff, foff, 4*MB)
 	}
 	d.wg.Wait()
 	d.handlers.DownloadCompleteHandler("main", d.contentLength.v())
@@ -142,15 +200,27 @@ func (d *Downloader) Start() (err error) {
 	return
 }
 
-func (d *Downloader) handlePart(ioff, foff, espeed int64) {
-	d.numConn++
-	part := d.spawnPart(ioff, foff)
-	defer func() { d.numConn--; part.close(); d.wg.Done() }()
-	d.runPart(part, ioff, foff, espeed, false)
+// TODO: fix concurrent write and iteration if any.
+
+// map[InitialOffset(int64)]ItemPart
+func (d *Downloader) Resume(parts map[int64]ItemPart) (err error) {
+	d.Log("Resuming download...")
+	d.ohmap.Make()
+	espeed := 4 * MB / int64(len(parts))
+	for ioff, ip := range parts {
+		d.wg.Add(1)
+		go d.resumePartDownload(ip.Hash, ioff, ip.FinalOffset, espeed)
+	}
+	d.wg.Wait()
+	d.handlers.DownloadCompleteHandler("main", d.contentLength.v())
+	d.Log("All segments downloaded!")
+	d.Log("Compiling segments...")
+	err = d.compile()
+	return
 }
 
-func (d *Downloader) spawnPart(ioff, foff int64) (part *Part) {
-	part = newPart(
+func (d *Downloader) spawnPart(ioff, foff int64) (part *Part, err error) {
+	part, err = newPart(
 		d.client,
 		d.url,
 		partArgs{
@@ -159,14 +229,64 @@ func (d *Downloader) spawnPart(ioff, foff int64) (part *Part) {
 			d.handlers.ProgressHandler,
 			d.handlers.DownloadCompleteHandler,
 			d.l,
+			ioff,
 		},
 	)
-	part.offset = ioff
+	if err != nil {
+		return
+	}
+	// part.offset = ioff
 	d.ohmap.Set(ioff, part.hash)
 	d.numParts++
 	d.Log("%s: Created new part", part.hash)
 	d.handlers.SpawnPartHandler(part.hash, ioff, foff)
 	return
+}
+
+func (d *Downloader) initPart(hash string, ioff, foff int64) (part *Part, err error) {
+	part, err = initPart(
+		d.client,
+		hash,
+		d.url,
+		partArgs{
+			d.chunk,
+			d.dlPath,
+			d.handlers.ProgressHandler,
+			d.handlers.DownloadCompleteHandler,
+			d.l,
+			ioff,
+		},
+	)
+	if err != nil {
+		return
+	}
+	d.ohmap.Set(ioff, hash)
+	d.numParts++
+	d.Log("%s: Resumed part", hash)
+	d.handlers.SpawnPartHandler(hash, ioff, foff)
+	return
+}
+
+func (d *Downloader) resumePartDownload(hash string, ioff, foff, espeed int64) error {
+	d.numConn++
+	part, err := d.initPart(hash, ioff, foff)
+	if err != nil {
+		return err
+	}
+	defer func() { d.numConn--; part.close(); d.wg.Done() }()
+	d.runPart(part, part.read+1, foff, espeed, false)
+	return nil
+}
+
+func (d *Downloader) newPartDownload(ioff, foff, espeed int64) error {
+	d.numConn++
+	part, err := d.spawnPart(ioff, foff)
+	if err != nil {
+		return err
+	}
+	defer func() { d.numConn--; part.close(); d.wg.Done() }()
+	d.runPart(part, ioff, foff, espeed, false)
+	return nil
 }
 
 // runPart downloads the content starting from ioff till foff bytes
@@ -230,31 +350,16 @@ func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64, repeated bool
 	// waitgroup, new part will download the last
 	// 2nd half of pending bytes.
 	d.wg.Add(1)
-	go d.handlePart(poff+div, foff, espeed/2)
+	go d.newPartDownload(poff+div, foff, espeed/2)
 
 	// current part will download the first half
 	// of pending bytes.
 	foff = poff + div - 1
 
 	d.Log("%s: part respawned", hash)
-	d.handlers.RespawnPartHandler(hash, poff, foff)
+	d.handlers.RespawnPartHandler(hash, part.offset, poff, foff)
 	d.runPart(part, poff, foff, espeed/2, false)
 }
-
-// SetMaxConnections sets the maximum number of parallel
-// network connections to be used for the downloading the file.
-
-// SetMaxParts sets the maximum number of file segments
-// to be created for the downloading the file.
-
-// SetDownloadLocation sets the download directory for
-// file to be downloaded.
-
-// SetFileName is used to set name of to-be-downloaded
-// file explicitly.
-//
-// Note: Warplib sets the file name sent by server
-// if file name not set explicitly.
 
 func (d *Downloader) GetFileName() string {
 	return d.fileName
@@ -342,7 +447,11 @@ func (d *Downloader) setupDlPath() (err error) {
 }
 
 func (d *Downloader) setupLogger() (err error) {
-	d.lw, err = os.Create(d.dlPath + "logs.txt")
+	d.lw, err = os.OpenFile(
+		d.dlPath+"logs.txt",
+		os.O_RDWR|os.O_CREATE|os.O_APPEND,
+		0666,
+	)
 	if err != nil {
 		return
 	}

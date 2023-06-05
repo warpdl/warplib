@@ -16,8 +16,14 @@ type Item struct {
 	ChildHash        string
 	Hidden           bool
 	Children         bool
-	Parts            map[int64]string
+	Parts            map[int64]ItemPart
 	mu               *sync.RWMutex
+	dAlloc           *Downloader
+}
+
+type ItemPart struct {
+	Hash        string
+	FinalOffset int64
 }
 
 type ItemsMap map[string]*Item
@@ -36,7 +42,7 @@ func newItem(mu *sync.RWMutex, name, url, dlloc, hash string, totalSize ContentL
 		Url:       url,
 		Hash:      hash,
 		TotalSize: totalSize,
-		Parts:     make(map[int64]string),
+		Parts:     make(map[int64]ItemPart),
 		DateAdded: time.Now(),
 		Hidden:    opts.Hide,
 		Children:  opts.Child,
@@ -45,10 +51,13 @@ func newItem(mu *sync.RWMutex, name, url, dlloc, hash string, totalSize ContentL
 	}
 }
 
-func (i *Item) addPart(ioff int64, hash string) {
+func (i *Item) addPart(hash string, ioff, foff int64) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	i.Parts[ioff] = hash
+	i.Parts[ioff] = ItemPart{
+		Hash:        hash,
+		FinalOffset: foff,
+	}
 }
 
 func (i *Item) GetPercentage() int64 {
@@ -59,4 +68,8 @@ func (i *Item) GetPercentage() int64 {
 func (i *Item) GetSavePath() (svPath string) {
 	svPath = GetPath(i.DownloadLocation, i.Name)
 	return
+}
+
+func (i *Item) Resume() error {
+	return i.dAlloc.Resume(i.Parts)
 }
