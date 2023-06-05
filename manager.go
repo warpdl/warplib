@@ -136,6 +136,7 @@ func (m *Manager) GetIncompleteItems() []*Item {
 func (m *Manager) GetItem(hash string) (item *Item) {
 	m.mu.RLock()
 	item = m.items[hash]
+	item.mu = m.mu
 	m.mu.RUnlock()
 	return
 }

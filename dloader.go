@@ -204,6 +204,9 @@ func (d *Downloader) Start() (err error) {
 
 // map[InitialOffset(int64)]ItemPart
 func (d *Downloader) Resume(parts map[int64]ItemPart) (err error) {
+	if len(parts) == 0 {
+		return errors.New("download is already complete")
+	}
 	d.Log("Resuming download...")
 	d.ohmap.Make()
 	espeed := 4 * MB / int64(len(parts))
