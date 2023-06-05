@@ -38,16 +38,17 @@ func newItem(mu *sync.RWMutex, name, url, dlloc, hash string, totalSize ContentL
 		opts = &ItemOpts{}
 	}
 	return &Item{
-		Name:      name,
-		Url:       url,
-		Hash:      hash,
-		TotalSize: totalSize,
-		Parts:     make(map[int64]ItemPart),
-		DateAdded: time.Now(),
-		Hidden:    opts.Hide,
-		Children:  opts.Child,
-		ChildHash: opts.ChildHash,
-		mu:        mu,
+		Hash:             hash,
+		Name:             name,
+		Url:              url,
+		DateAdded:        time.Now(),
+		TotalSize:        totalSize,
+		DownloadLocation: dlloc,
+		ChildHash:        opts.ChildHash,
+		Hidden:           opts.Hide,
+		Children:         opts.Child,
+		Parts:            make(map[int64]ItemPart),
+		mu:               mu,
 	}
 }
 

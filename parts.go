@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -37,7 +38,8 @@ type Part struct {
 	// expected speed
 	espeed int64
 	// logger
-	l *log.Logger
+	l  *log.Logger
+	wg *sync.WaitGroup
 }
 
 type partArgs struct {
@@ -49,7 +51,7 @@ type partArgs struct {
 	offset    int64
 }
 
-func initPart(client *http.Client, hash, url string, args partArgs) (*Part, error) {
+func initPart(wg *sync.WaitGroup, client *http.Client, hash, url string, args partArgs) (*Part, error) {
 	p := Part{
 		url:     url,
 		client:  client,
@@ -60,6 +62,7 @@ func initPart(client *http.Client, hash, url string, args partArgs) (*Part, erro
 		l:       args.logger,
 		offset:  args.offset,
 		hash:    hash,
+		wg:      wg,
 	}
 	err := p.openPartFile()
 	if err != nil {
@@ -72,7 +75,7 @@ func initPart(client *http.Client, hash, url string, args partArgs) (*Part, erro
 	return &p, nil
 }
 
-func newPart(client *http.Client, url string, args partArgs) (*Part, error) {
+func newPart(wg *sync.WaitGroup, client *http.Client, url string, args partArgs) (*Part, error) {
 	p := Part{
 		url:     url,
 		client:  client,
@@ -82,6 +85,7 @@ func newPart(client *http.Client, url string, args partArgs) (*Part, error) {
 		ofunc:   args.oHandler,
 		l:       args.logger,
 		offset:  args.offset,
+		wg:      wg,
 	}
 	p.setHash()
 	return &p, p.createPartFile()
@@ -142,7 +146,11 @@ func (p *Part) copyBuffer(src io.Reader, dst io.Writer, force bool) (slow bool, 
 	if err == io.EOF {
 		err = nil
 		p.log("%s: part download complete", p.hash)
-		go p.ofunc(p.hash, p.read)
+		p.wg.Add(1)
+		go func() {
+			p.ofunc(p.hash, p.read)
+			p.wg.Done()
+		}()
 	}
 	return
 }
@@ -158,7 +166,11 @@ func (p *Part) copyBufferChunk(src io.Reader, dst io.Writer, buf []byte) (err er
 			}
 		}
 		p.read += int64(nw)
-		go p.pfunc(p.hash, nw)
+		p.wg.Add(1)
+		go func() {
+			p.pfunc(p.hash, nw)
+			p.wg.Done()
+		}()
 		if ew != nil {
 			err = ew
 			return

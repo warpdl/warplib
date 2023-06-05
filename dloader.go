@@ -44,7 +44,7 @@ type Downloader struct {
 	hash string
 
 	dlPath string
-	wg     sync.WaitGroup
+	wg     *sync.WaitGroup
 	ohmap  VMap[int64, string]
 	l      *log.Logger
 	lw     io.WriteCloser
@@ -91,7 +91,7 @@ func NewDownloader(client *http.Client, url string, opts *DownloaderOpts) (d *Do
 	}
 	opts.DownloadDirectory = loc
 	d = &Downloader{
-		wg:       sync.WaitGroup{},
+		wg:       &sync.WaitGroup{},
 		client:   client,
 		url:      url,
 		maxConn:  opts.MaxConnections,
@@ -148,7 +148,7 @@ func initDownloader(client *http.Client, hash, url string, cLength ContentLength
 	}
 	opts.DownloadDirectory = loc
 	d = &Downloader{
-		wg:            sync.WaitGroup{},
+		wg:            &sync.WaitGroup{},
 		client:        client,
 		url:           url,
 		maxConn:       opts.MaxConnections,
@@ -224,6 +224,7 @@ func (d *Downloader) Resume(parts map[int64]ItemPart) (err error) {
 
 func (d *Downloader) spawnPart(ioff, foff int64) (part *Part, err error) {
 	part, err = newPart(
+		d.wg,
 		d.client,
 		d.url,
 		partArgs{
@@ -248,6 +249,7 @@ func (d *Downloader) spawnPart(ioff, foff int64) (part *Part, err error) {
 
 func (d *Downloader) initPart(hash string, ioff, foff int64) (part *Part, err error) {
 	part, err = initPart(
+		d.wg,
 		d.client,
 		hash,
 		d.url,
@@ -277,7 +279,11 @@ func (d *Downloader) resumePartDownload(hash string, ioff, foff, espeed int64) e
 		return err
 	}
 	defer func() { d.numConn--; part.close(); d.wg.Done() }()
-	d.runPart(part, part.read+1, foff, espeed, false)
+	poff := part.offset + part.read
+	if poff >= foff {
+		return nil
+	}
+	d.runPart(part, poff, foff, espeed, false)
 	return nil
 }
 
@@ -570,7 +576,7 @@ func (d *Downloader) prepareDownloader() (err error) {
 func (d *Downloader) compile() (err error) {
 	d.handlers.CompileStartHandler()
 	svPath := strings.Join([]string{d.dlLoc, d.fileName}, "/")
-	offsets := d.ohmap.Keys()
+	offsets, partList := d.ohmap.Dump()
 	if len(offsets) == 1 {
 		hash := d.ohmap.GetUnsafe(offsets[0])
 		fName := getFileName(d.dlPath, hash)
@@ -583,6 +589,8 @@ func (d *Downloader) compile() (err error) {
 		return
 	}
 	sortInt64s(offsets)
+	d.Log("Compiling %d parts...", len(offsets))
+	d.Log("Compiling Parts: %v", partList)
 	for _, offset := range offsets {
 		hash := d.ohmap.GetUnsafe(offset)
 		fName := getFileName(

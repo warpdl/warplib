@@ -61,17 +61,16 @@ func (m *Manager) AddDownload(d *Downloader, opts *AddDownloadOpts) {
 		},
 	)
 	m.UpdateItem(item)
+	m.patchHandlers(d, item)
+}
 
+func (m *Manager) patchHandlers(d *Downloader, item *Item) {
 	oSPH := d.handlers.SpawnPartHandler
 	d.handlers.SpawnPartHandler = func(hash string, ioff, foff int64) {
 		item.addPart(hash, ioff, foff)
 		m.UpdateItem(item)
 		oSPH(hash, ioff, foff)
 	}
-	m.patchHandlers(d, item)
-}
-
-func (m *Manager) patchHandlers(d *Downloader, item *Item) {
 	oRPH := d.handlers.RespawnPartHandler
 	d.handlers.RespawnPartHandler = func(hash string, partIoff, ioffNew, foffNew int64) {
 		item.addPart(hash, partIoff, foffNew)
@@ -87,6 +86,7 @@ func (m *Manager) patchHandlers(d *Downloader, item *Item) {
 	oCCH := d.handlers.CompileCompleteHandler
 	d.handlers.CompileCompleteHandler = func() {
 		item.Parts = nil
+		item.Downloaded = item.TotalSize
 		m.UpdateItem(item)
 		oCCH()
 	}
@@ -135,9 +135,12 @@ func (m *Manager) GetIncompleteItems() []*Item {
 
 func (m *Manager) GetItem(hash string) (item *Item) {
 	m.mu.RLock()
+	defer m.mu.RUnlock()
 	item = m.items[hash]
+	if item == nil {
+		return
+	}
 	item.mu = m.mu
-	m.mu.RUnlock()
 	return
 }
 

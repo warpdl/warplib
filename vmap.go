@@ -37,15 +37,19 @@ func (vm *VMap[kT, vT]) Get(key kT) (val vT) {
 	return
 }
 
-func (vm *VMap[kT, vT]) Keys() (keys []kT) {
-	keys = make([]kT, len(vm.kv))
+func (vm *VMap[kT, vT]) Dump() (keys []kT, vals []vT) {
+	n := len(vm.kv)
+
+	keys = make([]kT, n)
+	vals = make([]vT, n)
 
 	vm.mu.Lock()
 	defer vm.mu.Unlock()
 
 	var i int
-	for key := range vm.kv {
+	for key, val := range vm.kv {
 		keys[i] = key
+		vals[i] = val
 		i++
 	}
 	return
