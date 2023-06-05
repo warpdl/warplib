@@ -68,6 +68,10 @@ func (m *Manager) AddDownload(d *Downloader, opts *AddDownloadOpts) {
 		m.UpdateItem(item)
 		oSPH(hash, ioff, foff)
 	}
+	m.patchHandlers(d, item)
+}
+
+func (m *Manager) patchHandlers(d *Downloader, item *Item) {
 	oRPH := d.handlers.RespawnPartHandler
 	d.handlers.RespawnPartHandler = func(hash string, partIoff, ioffNew, foffNew int64) {
 		item.addPart(hash, partIoff, foffNew)
@@ -168,6 +172,7 @@ func (m *Manager) ResumeDownload(client *http.Client, hash string, opts *ResumeD
 		err = er
 		return
 	}
+	m.patchHandlers(d, item)
 	item.dAlloc = d
 	return
 }

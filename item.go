@@ -61,7 +61,7 @@ func (i *Item) addPart(hash string, ioff, foff int64) {
 }
 
 func (i *Item) GetPercentage() int64 {
-	p := (i.Downloaded / i.TotalSize) * 100
+	p := (i.Downloaded * 100) / i.TotalSize
 	return p.v()
 }
 
