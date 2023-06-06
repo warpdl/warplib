@@ -6,4 +6,4 @@ This document contains the list of things which might be added to the library in
 
 2.) Handle documents with unknown content length.
 
-3.) Add support for resuming downloads.
+3.) Add support for resuming downloads. (DONE)

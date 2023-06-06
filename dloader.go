@@ -1,6 +1,8 @@
 package warplib
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -11,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 type Downloader struct {
@@ -439,8 +440,9 @@ func (d *Downloader) setFileName(r *http.Request, h *http.Header) {
 }
 
 func (d *Downloader) setHash() {
-	tstamp := time.Now().UnixNano()
-	d.hash = fmt.Sprintf("%s_%d", d.fileName, tstamp)
+	buf := make([]byte, 4)
+	rand.Read(buf)
+	d.hash = hex.EncodeToString(buf)
 }
 
 func (d *Downloader) setupDlPath() (err error) {

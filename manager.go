@@ -2,7 +2,7 @@ package warplib
 
 import (
 	"encoding/gob"
-	"io"
+	"fmt"
 	"net/http"
 	"os"
 	"sync"
@@ -25,18 +25,19 @@ func InitManager() (m *Manager, err error) {
 		m = nil
 		return
 	}
-
 	err = gob.NewDecoder(m.f).Decode(&m.items)
-	if err == io.EOF {
+	if err != nil {
+		fmt.Println(err)
 		err = nil
 	}
 	return
 }
 
 type AddDownloadOpts struct {
-	IsHidden   bool
-	IsChildren bool
-	Child      *Downloader
+	IsHidden         bool
+	IsChildren       bool
+	Child            *Downloader
+	AbsoluteLocation string
 }
 
 func (m *Manager) AddDownload(d *Downloader, opts *AddDownloadOpts) {
@@ -55,9 +56,10 @@ func (m *Manager) AddDownload(d *Downloader, opts *AddDownloadOpts) {
 		d.hash,
 		d.contentLength,
 		&ItemOpts{
-			Child:     opts.IsChildren,
-			Hide:      opts.IsHidden,
-			ChildHash: cHash,
+			AbsoluteLocation: opts.AbsoluteLocation,
+			Child:            opts.IsChildren,
+			Hide:             opts.IsHidden,
+			ChildHash:        cHash,
 		},
 	)
 	m.UpdateItem(item)
@@ -122,10 +124,32 @@ func (m *Manager) GetItems() []*Item {
 	return items
 }
 
+func (m *Manager) GetPublicItems() []*Item {
+	var items = []*Item{}
+	for _, item := range m.GetItems() {
+		if item.Children {
+			continue
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
 func (m *Manager) GetIncompleteItems() []*Item {
 	var items = []*Item{}
 	for _, item := range m.GetItems() {
 		if item.TotalSize == item.Downloaded {
+			continue
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
+func (m *Manager) GetCompletedItems() []*Item {
+	var items = []*Item{}
+	for _, item := range m.GetItems() {
+		if item.TotalSize != item.Downloaded {
 			continue
 		}
 		items = append(items, item)
