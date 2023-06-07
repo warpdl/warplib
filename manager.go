@@ -40,7 +40,7 @@ type AddDownloadOpts struct {
 	AbsoluteLocation string
 }
 
-func (m *Manager) AddDownload(d *Downloader, opts *AddDownloadOpts) {
+func (m *Manager) AddDownload(d *Downloader, opts *AddDownloadOpts) (err error) {
 	if opts == nil {
 		opts = &AddDownloadOpts{}
 	}
@@ -48,7 +48,7 @@ func (m *Manager) AddDownload(d *Downloader, opts *AddDownloadOpts) {
 	if opts.Child != nil {
 		cHash = opts.Child.hash
 	}
-	item := newItem(
+	item, err := newItem(
 		m.mu,
 		d.fileName,
 		d.url,
@@ -62,8 +62,12 @@ func (m *Manager) AddDownload(d *Downloader, opts *AddDownloadOpts) {
 			ChildHash:        cHash,
 		},
 	)
+	if err != nil {
+		return err
+	}
 	m.UpdateItem(item)
 	m.patchHandlers(d, item)
+	return
 }
 
 func (m *Manager) patchHandlers(d *Downloader, item *Item) {

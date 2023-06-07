@@ -1,7 +1,7 @@
 package warplib
 
 import (
-	"strings"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -36,14 +36,20 @@ type ItemOpts struct {
 	AbsoluteLocation string
 }
 
-func newItem(mu *sync.RWMutex, name, url, dlloc, hash string, totalSize ContentLength, opts *ItemOpts) *Item {
+func newItem(mu *sync.RWMutex, name, url, dlloc, hash string, totalSize ContentLength, opts *ItemOpts) (i *Item, err error) {
 	if opts == nil {
 		opts = &ItemOpts{}
 	}
-	opts.AbsoluteLocation = strings.TrimSuffix(
-		opts.AbsoluteLocation, "/",
+	opts.AbsoluteLocation, err = filepath.Abs(
+		opts.AbsoluteLocation,
 	)
-	return &Item{
+	if err != nil {
+		return
+	}
+	// opts.AbsoluteLocation = strings.TrimSuffix(
+	// 	opts.AbsoluteLocation, "/",
+	// )
+	i = &Item{
 		Hash:             hash,
 		Name:             name,
 		Url:              url,
@@ -57,6 +63,7 @@ func newItem(mu *sync.RWMutex, name, url, dlloc, hash string, totalSize ContentL
 		Parts:            make(map[int64]ItemPart),
 		mu:               mu,
 	}
+	return
 }
 
 func (i *Item) addPart(hash string, ioff, foff int64) {

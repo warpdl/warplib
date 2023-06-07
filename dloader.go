@@ -10,6 +10,7 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -85,12 +86,17 @@ func NewDownloader(client *http.Client, url string, opts *DownloaderOpts) (d *Do
 	if opts.MaxConnections == 0 {
 		opts.MaxConnections = DEF_MAX_CONNS
 	}
-	loc := opts.DownloadDirectory
-	loc = strings.TrimSuffix(loc, "/")
-	if loc == "" {
-		loc = "."
+	// loc := opts.DownloadDirectory
+	// loc = strings.TrimSuffix(loc, "/")
+	// if loc == "" {
+	// 	loc = "."
+	// }
+	opts.DownloadDirectory, err = filepath.Abs(
+		opts.DownloadDirectory,
+	)
+	if err != nil {
+		return
 	}
-	opts.DownloadDirectory = loc
 	d = &Downloader{
 		wg:       &sync.WaitGroup{},
 		client:   client,
@@ -142,12 +148,18 @@ func initDownloader(client *http.Client, hash, url string, cLength ContentLength
 	if opts.MaxConnections == 0 {
 		opts.MaxConnections = DEF_MAX_CONNS
 	}
-	loc := opts.DownloadDirectory
-	loc = strings.TrimSuffix(loc, "/")
-	if loc == "" {
-		loc = "."
+	// loc := opts.DownloadDirectory
+	// loc = strings.TrimSuffix(loc, "/")
+	// if loc == "" {
+	// 	loc = "."
+	// }
+	// opts.DownloadDirectory = loc
+	opts.DownloadDirectory, err = filepath.Abs(
+		opts.DownloadDirectory,
+	)
+	if err != nil {
+		return
 	}
-	opts.DownloadDirectory = loc
 	d = &Downloader{
 		wg:            &sync.WaitGroup{},
 		client:        client,
