@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -417,7 +418,12 @@ func (d *Downloader) NumConnections() int {
 // Log adds the provided string to download's log file.
 // It can't be used once download is complete.
 func (d *Downloader) Log(s string, a ...any) {
-	d.l.Printf(s+"\n", a...)
+	esc := "\n"
+	switch runtime.GOOS {
+	case "windows":
+		esc = "\r\n"
+	}
+	d.l.Printf(s+esc, a...)
 }
 
 func (d *Downloader) getPartSize() (partSize, rpartSize int64) {
