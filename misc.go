@@ -26,6 +26,8 @@ const (
 	DEF_CHUNK_SIZE = 32 * KB
 )
 
+const MAIN_HASH = "main"
+
 func GetPath(directory, file string) (path string) {
 	path = strings.Join(
 		[]string{

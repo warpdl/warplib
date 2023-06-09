@@ -78,8 +78,8 @@ func (m *Manager) patchHandlers(d *Downloader, item *Item) {
 		m.UpdateItem(item)
 		oRPH(hash, partIoff, ioffNew, foffNew)
 	}
-	oPH := d.handlers.ProgressHandler
-	d.handlers.ProgressHandler = func(hash string, nread int) {
+	oPH := d.handlers.DownloadProgressHandler
+	d.handlers.DownloadProgressHandler = func(hash string, nread int) {
 		item.Downloaded += ContentLength(nread)
 		m.UpdateItem(item)
 		oPH(hash, nread)

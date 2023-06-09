@@ -207,7 +207,7 @@ func (d *Downloader) Start() (err error) {
 		go d.newPartDownload(ioff, foff, 4*MB)
 	}
 	d.wg.Wait()
-	d.handlers.DownloadCompleteHandler("main", d.contentLength.v())
+	d.handlers.DownloadCompleteHandler(MAIN_HASH, d.contentLength.v())
 	d.Log("All segments downloaded!")
 	d.Log("Compiling segments...")
 	err = d.compile()
@@ -229,7 +229,7 @@ func (d *Downloader) Resume(parts map[int64]ItemPart) (err error) {
 		go d.resumePartDownload(ip.Hash, ioff, ip.FinalOffset, espeed)
 	}
 	d.wg.Wait()
-	d.handlers.DownloadCompleteHandler("main", d.contentLength.v())
+	d.handlers.DownloadCompleteHandler("MAIN_HASH", d.contentLength.v())
 	d.Log("All segments downloaded!")
 	d.Log("Compiling segments...")
 	err = d.compile()
@@ -244,7 +244,8 @@ func (d *Downloader) spawnPart(ioff, foff int64) (part *Part, err error) {
 		partArgs{
 			d.chunk,
 			d.dlPath,
-			d.handlers.ProgressHandler,
+			d.handlers.ResumeProgressHandler,
+			d.handlers.DownloadProgressHandler,
 			d.handlers.DownloadCompleteHandler,
 			d.l,
 			ioff,
@@ -270,7 +271,8 @@ func (d *Downloader) initPart(hash string, ioff, foff int64) (part *Part, err er
 		partArgs{
 			d.chunk,
 			d.dlPath,
-			d.handlers.ProgressHandler,
+			d.handlers.ResumeProgressHandler,
+			d.handlers.DownloadProgressHandler,
 			d.handlers.DownloadCompleteHandler,
 			d.l,
 			ioff,
@@ -634,7 +636,7 @@ func (d *Downloader) compile() (err error) {
 		}()
 	}
 	d.Log("Compilation complete!")
-	err = d.lw.Close()
 	d.handlers.CompileCompleteHandler()
+	err = d.lw.Close()
 	return
 }

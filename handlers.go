@@ -6,7 +6,8 @@ type (
 	ErrorHandlerFunc            func(hash string, err error)
 	SpawnPartHandlerFunc        func(hash string, ioff, foff int64)
 	RespawnPartHandlerFunc      func(hash string, partIoff, ioffNew, foffNew int64)
-	ProgressHandlerFunc         func(hash string, nread int)
+	DownloadProgressHandlerFunc func(hash string, nread int)
+	ResumeProgressHandlerFunc   func(nread int)
 	DownloadCompleteHandlerFunc func(hash string, tread int64)
 	CompileStartHandlerFunc     func()
 	CompileProgressHandlerFunc  func(nread int)
@@ -16,7 +17,8 @@ type (
 type Handlers struct {
 	SpawnPartHandler        SpawnPartHandlerFunc
 	RespawnPartHandler      RespawnPartHandlerFunc
-	ProgressHandler         ProgressHandlerFunc
+	DownloadProgressHandler DownloadProgressHandlerFunc
+	ResumeProgressHandler   ResumeProgressHandlerFunc
 	ErrorHandler            ErrorHandlerFunc
 	DownloadCompleteHandler DownloadCompleteHandlerFunc
 	CompileStartHandler     CompileStartHandlerFunc
@@ -31,8 +33,11 @@ func (h *Handlers) setDefault(l *log.Logger) {
 	if h.RespawnPartHandler == nil {
 		h.RespawnPartHandler = func(hash string, partIoff, ioffNew, foffNew int64) {}
 	}
-	if h.ProgressHandler == nil {
-		h.ProgressHandler = func(hash string, nread int) {}
+	if h.DownloadProgressHandler == nil {
+		h.DownloadProgressHandler = func(hash string, nread int) {}
+	}
+	if h.ResumeProgressHandler == nil {
+		h.ResumeProgressHandler = func(nread int) {}
 	}
 	if h.DownloadCompleteHandler == nil {
 		h.DownloadCompleteHandler = func(hash string, tread int64) {}

@@ -24,7 +24,7 @@ type Part struct {
 	// number of bytes downloaded
 	read int64
 	// progress handler
-	pfunc ProgressHandlerFunc
+	pfunc DownloadProgressHandlerFunc
 	// dl compl handler
 	ofunc DownloadCompleteHandlerFunc
 	// http client
@@ -45,7 +45,8 @@ type Part struct {
 type partArgs struct {
 	copyChunk int
 	preName   string
-	pHandler  ProgressHandlerFunc
+	rpHandler ResumeProgressHandlerFunc
+	pHandler  DownloadProgressHandlerFunc
 	oHandler  DownloadCompleteHandlerFunc
 	logger    *log.Logger
 	offset    int64
@@ -68,7 +69,7 @@ func initPart(wg *sync.WaitGroup, client *http.Client, hash, url string, args pa
 	if err != nil {
 		return nil, err
 	}
-	err = p.seek()
+	err = p.seek(args.rpHandler)
 	if err != nil {
 		return nil, err
 	}
@@ -214,9 +215,9 @@ func (p *Part) openPartFile() (err error) {
 	return
 }
 
-func (p *Part) seek() (err error) {
+func (p *Part) seek(rpFunc ResumeProgressHandlerFunc) (err error) {
 	pReader := NewProxyReader(p.f, func(n int) {
-		p.pfunc(p.hash, n)
+		rpFunc(n)
 	})
 	n, err := io.Copy(io.Discard, pReader)
 	if err != nil {
