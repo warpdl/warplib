@@ -18,14 +18,16 @@ type Item struct {
 	ChildHash        string
 	Hidden           bool
 	Children         bool
-	Parts            map[int64]ItemPart
+	Parts            map[int64]*ItemPart
 	mu               *sync.RWMutex
 	dAlloc           *Downloader
+	memPart          map[string]int64
 }
 
 type ItemPart struct {
 	Hash        string
 	FinalOffset int64
+	Compiled    bool
 }
 
 type ItemsMap map[string]*Item
@@ -46,9 +48,6 @@ func newItem(mu *sync.RWMutex, name, url, dlloc, hash string, totalSize ContentL
 	if err != nil {
 		return
 	}
-	// opts.AbsoluteLocation = strings.TrimSuffix(
-	// 	opts.AbsoluteLocation, "/",
-	// )
 	i = &Item{
 		Hash:             hash,
 		Name:             name,
@@ -60,7 +59,8 @@ func newItem(mu *sync.RWMutex, name, url, dlloc, hash string, totalSize ContentL
 		ChildHash:        opts.ChildHash,
 		Hidden:           opts.Hide,
 		Children:         opts.Child,
-		Parts:            make(map[int64]ItemPart),
+		Parts:            make(map[int64]*ItemPart),
+		memPart:          make(map[string]int64),
 		mu:               mu,
 	}
 	return
@@ -69,10 +69,25 @@ func newItem(mu *sync.RWMutex, name, url, dlloc, hash string, totalSize ContentL
 func (i *Item) addPart(hash string, ioff, foff int64) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	i.Parts[ioff] = ItemPart{
+	i.Parts[ioff] = &ItemPart{
 		Hash:        hash,
 		FinalOffset: foff,
 	}
+	i.memPart[hash] = ioff
+}
+
+func (i *Item) savePart(offset int64, part *ItemPart) {
+	i.mu.Lock()
+	defer i.mu.Lock()
+	i.Parts[offset] = part
+}
+
+func (i *Item) getPart(hash string) (offset int64, part *ItemPart) {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	offset = i.memPart[hash]
+	part = i.Parts[offset]
+	return
 }
 
 func (i *Item) GetPercentage() int64 {

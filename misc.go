@@ -2,9 +2,11 @@ package warplib
 
 import (
 	"fmt"
+	"log"
 	"mime"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -170,3 +172,12 @@ var DlDataDir = func() (dlDir string) {
 // 	}
 // 	return
 // }()
+
+func wlog(l *log.Logger, s string, a ...any) {
+	esc := "\n"
+	switch runtime.GOOS {
+	case "windows":
+		esc = "\r\n"
+	}
+	l.Printf(s+esc, a...)
+}

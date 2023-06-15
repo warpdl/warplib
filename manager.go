@@ -25,6 +25,7 @@ func InitManager() (m *Manager, err error) {
 		return
 	}
 	_ = gob.NewDecoder(m.f).Decode(&m.items)
+	m.populateMemPart()
 	return
 }
 
@@ -33,6 +34,17 @@ type AddDownloadOpts struct {
 	IsChildren       bool
 	Child            *Downloader
 	AbsoluteLocation string
+}
+
+func (m *Manager) populateMemPart() {
+	for _, item := range m.items {
+		if item.memPart == nil {
+			item.memPart = make(map[string]int64)
+		}
+		for ioff, part := range item.Parts {
+			item.memPart[part.Hash] = ioff
+		}
+	}
 }
 
 func (m *Manager) AddDownload(d *Downloader, opts *AddDownloadOpts) (err error) {
@@ -85,11 +97,18 @@ func (m *Manager) patchHandlers(d *Downloader, item *Item) {
 		oPH(hash, nread)
 	}
 	oCCH := d.handlers.CompileCompleteHandler
-	d.handlers.CompileCompleteHandler = func() {
+	d.handlers.CompileCompleteHandler = func(hash string, tread int64) {
+		if hash != MAIN_HASH {
+			off, part := item.getPart(hash)
+			part.Compiled = true
+			item.savePart(off, part)
+			oCCH(hash, tread)
+			return
+		}
 		item.Parts = nil
 		item.Downloaded = item.TotalSize
 		m.UpdateItem(item)
-		oCCH()
+		oCCH(hash, tread)
 	}
 }
 
@@ -163,6 +182,7 @@ func (m *Manager) GetItem(hash string) (item *Item) {
 	if item == nil {
 		return
 	}
+	item.memPart = make(map[string]int64)
 	item.mu = m.mu
 	return
 }

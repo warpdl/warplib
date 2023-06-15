@@ -7,11 +7,12 @@ type (
 	SpawnPartHandlerFunc        func(hash string, ioff, foff int64)
 	RespawnPartHandlerFunc      func(hash string, partIoff, ioffNew, foffNew int64)
 	DownloadProgressHandlerFunc func(hash string, nread int)
-	ResumeProgressHandlerFunc   func(nread int)
+	ResumeProgressHandlerFunc   func(hash string, nread int)
 	DownloadCompleteHandlerFunc func(hash string, tread int64)
-	CompileStartHandlerFunc     func()
-	CompileProgressHandlerFunc  func(nread int)
-	CompileCompleteHandlerFunc  func()
+	CompileStartHandlerFunc     func(hash string)
+	CompileProgressHandlerFunc  func(hash string, nread int)
+	CompileSkippedHandlerFunc   func(hash string, tread int64)
+	CompileCompleteHandlerFunc  func(hash string, tread int64)
 )
 
 type Handlers struct {
@@ -23,6 +24,7 @@ type Handlers struct {
 	DownloadCompleteHandler DownloadCompleteHandlerFunc
 	CompileStartHandler     CompileStartHandlerFunc
 	CompileProgressHandler  CompileProgressHandlerFunc
+	CompileSkippedHandler   CompileSkippedHandlerFunc
 	CompileCompleteHandler  CompileCompleteHandlerFunc
 }
 
@@ -37,23 +39,26 @@ func (h *Handlers) setDefault(l *log.Logger) {
 		h.DownloadProgressHandler = func(hash string, nread int) {}
 	}
 	if h.ResumeProgressHandler == nil {
-		h.ResumeProgressHandler = func(nread int) {}
+		h.ResumeProgressHandler = func(hash string, nread int) {}
 	}
 	if h.DownloadCompleteHandler == nil {
 		h.DownloadCompleteHandler = func(hash string, tread int64) {}
 	}
 	if h.CompileStartHandler == nil {
-		h.CompileStartHandler = func() {}
+		h.CompileStartHandler = func(hash string) {}
 	}
 	if h.CompileProgressHandler == nil {
-		h.CompileProgressHandler = func(nread int) {}
+		h.CompileProgressHandler = func(hash string, nread int) {}
+	}
+	if h.CompileSkippedHandler == nil {
+		h.CompileSkippedHandler = func(hash string, tread int64) {}
 	}
 	if h.CompileCompleteHandler == nil {
-		h.CompileCompleteHandler = func() {}
+		h.CompileCompleteHandler = func(hash string, tread int64) {}
 	}
 	if h.ErrorHandler == nil {
 		h.ErrorHandler = func(hash string, err error) {
-			l.Printf("%s: %s\n", hash, err.Error())
+			wlog(l, "%s: Error: %w", hash, err)
 		}
 	}
 }

@@ -23,23 +23,27 @@ type Part struct {
 	hash string
 	// number of bytes downloaded
 	read int64
-	// progress handler
+	// download progress handler
 	pfunc DownloadProgressHandlerFunc
-	// dl compl handler
+	// download complete handler
 	ofunc DownloadCompleteHandlerFunc
+	// compile progress handler
+	cfunc CompileProgressHandlerFunc
 	// http client
 	client *http.Client
 	// prename
 	preName string
 	// part file
-	f *os.File
+	pf *os.File
 	// offset of part
 	offset int64
 	// expected speed
-	espeed int64
+	etime time.Duration
 	// logger
 	l  *log.Logger
 	wg *sync.WaitGroup
+	// main download file
+	f *os.File
 }
 
 type partArgs struct {
@@ -48,8 +52,10 @@ type partArgs struct {
 	rpHandler ResumeProgressHandlerFunc
 	pHandler  DownloadProgressHandlerFunc
 	oHandler  DownloadCompleteHandlerFunc
+	cpHandler CompileProgressHandlerFunc
 	logger    *log.Logger
 	offset    int64
+	f         *os.File
 }
 
 func initPart(wg *sync.WaitGroup, client *http.Client, hash, url string, args partArgs) (*Part, error) {
@@ -60,10 +66,12 @@ func initPart(wg *sync.WaitGroup, client *http.Client, hash, url string, args pa
 		preName: args.preName,
 		pfunc:   args.pHandler,
 		ofunc:   args.oHandler,
+		cfunc:   args.cpHandler,
 		l:       args.logger,
 		offset:  args.offset,
 		hash:    hash,
 		wg:      wg,
+		f:       args.f,
 	}
 	err := p.openPartFile()
 	if err != nil {
@@ -84,16 +92,18 @@ func newPart(wg *sync.WaitGroup, client *http.Client, url string, args partArgs)
 		preName: args.preName,
 		pfunc:   args.pHandler,
 		ofunc:   args.oHandler,
+		cfunc:   args.cpHandler,
 		l:       args.logger,
 		offset:  args.offset,
 		wg:      wg,
+		f:       args.f,
 	}
 	p.setHash()
 	return &p, p.createPartFile()
 }
 
 func (p *Part) setEpeed(espeed int64) {
-	p.espeed = espeed
+	p.etime = getDownloadTime(espeed, int64(p.chunk))
 }
 
 func (p *Part) download(ioff, foff int64, force bool) (slow bool, err error) {
@@ -115,7 +125,7 @@ func (p *Part) download(ioff, foff int64, force bool) (slow bool, err error) {
 		return
 	}
 	defer resp.Body.Close()
-	return p.copyBuffer(resp.Body, p.f, force)
+	return p.copyBuffer(resp.Body, p.pf, force)
 }
 
 func (p *Part) copyBuffer(src io.Reader, dst io.Writer, force bool) (slow bool, err error) {
@@ -133,7 +143,7 @@ func (p *Part) copyBuffer(src io.Reader, dst io.Writer, force bool) (slow bool, 
 			if err != nil {
 				break
 			}
-			if te > getDownloadTime(p.espeed, int64(p.chunk)) {
+			if te > p.etime {
 				slow = true
 				return
 			}
@@ -185,6 +195,51 @@ func (p *Part) copyBufferChunk(src io.Reader, dst io.Writer, buf []byte) (err er
 	return
 }
 
+func (p *Part) compile() (read, written int64, err error) {
+	wg := &sync.WaitGroup{}
+	// take the reader to origin from end
+	p.pf.Seek(0, 0)
+
+	buf := make([]byte, p.chunk)
+	off := p.offset
+	for {
+		nr, er := p.pf.Read(buf)
+		read += int64(nr)
+		if nr > 0 {
+			nw, ew := p.f.WriteAt(buf[0:nr], off)
+			if nw < 0 || nr < nw {
+				nw = 0
+				if ew == nil {
+					ew = errors.New("invalid write results")
+				}
+			}
+			written += int64(nw)
+			wg.Add(1)
+			go func() {
+				p.cfunc(p.hash, nw)
+				wg.Done()
+			}()
+			if ew != nil {
+				err = ew
+				break
+			}
+			if nr != nw {
+				err = io.ErrShortWrite
+				break
+			}
+		}
+		off += int64(nr)
+		if er != nil {
+			if er != io.EOF {
+				err = er
+			}
+			break
+		}
+	}
+	wg.Wait()
+	return
+}
+
 func setRange(header http.Header, ioff, foff int64) {
 	str := func(i int64) string {
 		return strconv.FormatInt(i, 10)
@@ -206,18 +261,18 @@ func (p *Part) setHash() {
 }
 
 func (p *Part) createPartFile() (err error) {
-	p.f, err = os.Create(p.getFileName())
+	p.pf, err = os.Create(p.getFileName())
 	return
 }
 
 func (p *Part) openPartFile() (err error) {
-	p.f, err = os.OpenFile(p.getFileName(), os.O_RDWR, 0666)
+	p.pf, err = os.OpenFile(p.getFileName(), os.O_RDWR, 0666)
 	return
 }
 
 func (p *Part) seek(rpFunc ResumeProgressHandlerFunc) (err error) {
-	pReader := NewProxyReader(p.f, func(n int) {
-		rpFunc(n)
+	pReader := NewProxyReader(p.pf, func(n int) {
+		rpFunc(p.hash, n)
 	})
 	n, err := io.Copy(io.Discard, pReader)
 	if err != nil {
@@ -232,7 +287,7 @@ func (p *Part) getFileName() string {
 }
 
 func (p *Part) close() error {
-	return p.f.Close()
+	return p.pf.Close()
 }
 
 func (p *Part) log(s string, a ...any) {

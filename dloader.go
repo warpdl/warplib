@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -51,6 +50,8 @@ type Downloader struct {
 	ohmap  VMap[int64, string]
 	l      *log.Logger
 	lw     io.WriteCloser
+	f      *os.File
+	fName  string
 }
 
 // Optional fields of downloader
@@ -194,6 +195,12 @@ func initDownloader(client *http.Client, hash, url string, cLength ContentLength
 // Start downloads the file and blocks current goroutine
 // until the downloading is complete.
 func (d *Downloader) Start() (err error) {
+	defer d.lw.Close()
+	err = d.openFile()
+	if err != nil {
+		return
+	}
+	defer d.f.Close()
 	d.Log("Starting download...")
 	d.ohmap.Make()
 	partSize, rpartSize := d.getPartSize()
@@ -209,30 +216,51 @@ func (d *Downloader) Start() (err error) {
 	d.wg.Wait()
 	d.handlers.DownloadCompleteHandler(MAIN_HASH, d.contentLength.v())
 	d.Log("All segments downloaded!")
-	d.Log("Compiling segments...")
-	err = d.compile()
+	// d.Log("Compiling segments...")
+	// err = d.compile()
+	svPath := strings.Join([]string{d.dlLoc, d.fileName}, "/")
+	err = os.Rename(d.fName, svPath)
 	return
 }
 
 // TODO: fix concurrent write and iteration if any.
 
 // map[InitialOffset(int64)]ItemPart
-func (d *Downloader) Resume(parts map[int64]ItemPart) (err error) {
+func (d *Downloader) Resume(parts map[int64]*ItemPart) (err error) {
+	defer d.lw.Close()
 	if len(parts) == 0 {
 		return errors.New("download is already complete")
 	}
+	err = d.openFile()
+	if err != nil {
+		return
+	}
+	defer d.f.Close()
 	d.Log("Resuming download...")
 	d.ohmap.Make()
 	espeed := 4 * MB / int64(len(parts))
 	for ioff, ip := range parts {
+		if ip.Compiled {
+			d.handlers.CompileSkippedHandler(ip.Hash, ip.FinalOffset-ioff)
+			continue
+		}
 		d.wg.Add(1)
 		go d.resumePartDownload(ip.Hash, ioff, ip.FinalOffset, espeed)
 	}
 	d.wg.Wait()
-	d.handlers.DownloadCompleteHandler("MAIN_HASH", d.contentLength.v())
+	d.handlers.DownloadCompleteHandler(MAIN_HASH, d.contentLength.v())
 	d.Log("All segments downloaded!")
-	d.Log("Compiling segments...")
-	err = d.compile()
+	// d.Log("Compiling segments...")
+	// err = d.compile()
+	return
+}
+
+func (d *Downloader) openFile() (err error) {
+	d.fName = d.dlPath + "warp.dl"
+	d.f, err = os.OpenFile(d.fName,
+		os.O_RDWR|os.O_CREATE,
+		0666,
+	)
 	return
 }
 
@@ -247,8 +275,10 @@ func (d *Downloader) spawnPart(ioff, foff int64) (part *Part, err error) {
 			d.handlers.ResumeProgressHandler,
 			d.handlers.DownloadProgressHandler,
 			d.handlers.DownloadCompleteHandler,
+			d.handlers.CompileProgressHandler,
 			d.l,
 			ioff,
+			d.f,
 		},
 	)
 	if err != nil {
@@ -274,8 +304,10 @@ func (d *Downloader) initPart(hash string, ioff, foff int64) (part *Part, err er
 			d.handlers.ResumeProgressHandler,
 			d.handlers.DownloadProgressHandler,
 			d.handlers.DownloadCompleteHandler,
+			d.handlers.CompileProgressHandler,
 			d.l,
 			ioff,
+			d.f,
 		},
 	)
 	if err != nil {
@@ -288,30 +320,87 @@ func (d *Downloader) initPart(hash string, ioff, foff int64) (part *Part, err er
 	return
 }
 
-func (d *Downloader) resumePartDownload(hash string, ioff, foff, espeed int64) error {
+func (d *Downloader) resumePartDownload(hash string, ioff, foff, espeed int64) {
 	d.numConn++
 	part, err := d.initPart(hash, ioff, foff)
 	if err != nil {
-		return err
+		d.Log("%s: init: %w", hash, err)
+		return
 	}
-	defer func() { d.numConn--; part.close(); d.wg.Done() }()
+	defer func() { d.numConn--; d.wg.Done() }()
 	poff := part.offset + part.read
 	if poff >= foff {
-		return nil
+		d.Log("%s: part offset (%d) greater than final offset (%d)", hash, poff, foff)
+		return
 	}
 	d.runPart(part, poff, foff, espeed, false)
-	return nil
+
+	d.handlers.CompileStartHandler(part.hash)
+	defer d.handlers.CompileCompleteHandler(part.hash, part.read)
+
+	d.Log("%s: compiling part", hash)
+
+	var read, written int64
+	read, written, err = part.compile()
+
+	// close part file
+	part.close()
+
+	if err != nil {
+		d.Log("%s: compile: %w", hash, err)
+		return
+	}
+	d.Log("%s: compilation complete: read %d bytes and wrote %d bytes", hash, read, written)
+
+	fName := getFileName(
+		d.dlPath,
+		hash,
+	)
+	err = os.Remove(fName)
+	if err == nil {
+		return
+	}
+	d.Log("%s: remove: %w", hash, err)
 }
 
-func (d *Downloader) newPartDownload(ioff, foff, espeed int64) error {
+func (d *Downloader) newPartDownload(ioff, foff, espeed int64) {
 	d.numConn++
 	part, err := d.spawnPart(ioff, foff)
 	if err != nil {
-		return err
+		d.Log("failed to spawn new part: %w", err)
+		return
 	}
-	defer func() { d.numConn--; part.close(); d.wg.Done() }()
+	hash := part.hash
+
+	defer func() { d.numConn--; d.wg.Done() }()
 	d.runPart(part, ioff, foff, espeed, false)
-	return nil
+
+	d.handlers.CompileStartHandler(part.hash)
+	defer d.handlers.CompileCompleteHandler(part.hash, part.read)
+
+	d.Log("%s: compiling part", hash)
+
+	var read, written int64
+	read, written, err = part.compile()
+
+	// close part file
+	part.close()
+
+	if err != nil {
+		d.Log("%s: compile: %w", hash, err)
+		return
+	}
+	d.Log("%s: compilation complete: read %d bytes and wrote %d bytes", hash, read, written)
+
+	fName := getFileName(
+		d.dlPath,
+		hash,
+	)
+	err = os.Remove(fName)
+	if err == nil {
+		return
+	}
+	d.Log("%s: remove: %w", hash, err)
 }
 
 // runPart downloads the content starting from ioff till foff bytes
@@ -420,12 +509,7 @@ func (d *Downloader) NumConnections() int {
 // Log adds the provided string to download's log file.
 // It can't be used once download is complete.
 func (d *Downloader) Log(s string, a ...any) {
-	esc := "\n"
-	switch runtime.GOOS {
-	case "windows":
-		esc = "\r\n"
-	}
-	d.l.Printf(s+esc, a...)
+	wlog(d.l, s, a...)
 }
 
 func (d *Downloader) getPartSize() (partSize, rpartSize int64) {
@@ -595,48 +679,54 @@ func (d *Downloader) prepareDownloader() (err error) {
 	return
 }
 
-func (d *Downloader) compile() (err error) {
-	d.handlers.CompileStartHandler()
-	svPath := strings.Join([]string{d.dlLoc, d.fileName}, "/")
-	offsets, partList := d.ohmap.Dump()
-	if len(offsets) == 1 {
-		hash := d.ohmap.GetUnsafe(offsets[0])
-		fName := getFileName(d.dlPath, hash)
-		err = os.Rename(fName, svPath)
-		return
-	}
-	file, ef := os.Create(svPath)
-	if ef != nil {
-		err = ef
-		return
-	}
-	sortInt64s(offsets)
-	d.Log("Compiling %d parts...", len(offsets))
-	d.Log("Compiling Parts: %v", partList)
-	for _, offset := range offsets {
-		hash := d.ohmap.GetUnsafe(offset)
-		fName := getFileName(
-			d.dlPath,
-			hash,
-		)
-		f, ef := os.Open(fName)
-		if ef != nil {
-			err = ef
-			return
-		}
-		_, err = io.Copy(file, NewProxyReader(f, d.handlers.CompileProgressHandler))
-		if err != nil {
-			return
-		}
-		defer func() {
-			er := os.Remove(fName)
-			if er != nil {
-				d.Log("Failed to remove part %s: %w", hash, er)
-			}
-		}()
-	}
-	d.Log("Compilation complete!")
-	d.handlers.CompileCompleteHandler()
-	err = d.lw.Close()
-	return
-}
+// func (d *Downloader) compile() (err error) {
+// 	// defer d.lw.Close()
+// 	// svPath := strings.Join([]string{d.dlLoc, d.fileName}, "/")
+// 	// err = os.Rename(d.fName, svPath)
+// 	// return
+// 	// d.handlers.CompileStartHandler("main")
+// 	// svPath := strings.Join([]string{d.dlLoc, d.fileName}, "/")
+// 	// offsets, partList := d.ohmap.Dump()
+// 	// if len(offsets) == 1 {
+// 	// 	hash := d.ohmap.GetUnsafe(offsets[0])
+// 	// 	fName := getFileName(d.dlPath, hash)
+// 	// 	err = os.Rename(fName, svPath)
+// 	// 	return
+// 	// }
+// 	// file, ef := os.Create(svPath)
+// 	// if ef != nil {
+// 	// 	err = ef
+// 	// 	return
+// 	// }
+// 	// sortInt64s(offsets)
+// 	// d.Log("Compiling %d parts...", len(offsets))
+// 	// d.Log("Compiling Parts: %v", partList)
+// 	// for _, offset := range offsets {
+// 	// 	hash := d.ohmap.GetUnsafe(offset)
+// 	// 	fName := getFileName(
+// 	// 		d.dlPath,
+// 	// 		hash,
+// 	// 	)
+// 	// 	f, ef := os.Open(fName)
+// 	// 	if ef != nil {
+// 	// 		err = ef
+// 	// 		return
+// 	// 	}
+// 	// 	_, err = io.Copy(file, NewProxyReader(f, func(n int) {
+// 	// 		d.handlers.CompileProgressHandler("main", n)
+// 	// 	}))
+// 	// 	if err != nil {
+// 	// 		return
+// 	// 	}
+// 	// 	defer func() {
+// 	// 		er := os.Remove(fName)
+// 	// 		if er != nil {
+// 	// 			d.Log("Failed to remove part %s: %w", hash, er)
+// 	// 		}
+// 	// 	}()
+// 	// }
+// 	// d.Log("Compilation complete!")
+// 	// d.handlers.CompileCompleteHandler("main", d.contentLength.v())
+// 	// err = d.lw.Close()
+// 	// return
+// }
