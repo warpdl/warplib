@@ -2,6 +2,7 @@ package warplib
 
 import (
 	"encoding/gob"
+	"errors"
 	"net/http"
 	"os"
 	"sync"
@@ -98,17 +99,24 @@ func (m *Manager) patchHandlers(d *Downloader, item *Item) {
 	}
 	oCCH := d.handlers.CompileCompleteHandler
 	d.handlers.CompileCompleteHandler = func(hash string, tread int64) {
+		off, part := item.getPart(hash)
+		if part == nil {
+			d.handlers.ErrorHandler(hash, errors.New("manager part item is nil"))
+			return
+		}
+		part.Compiled = true
+		item.savePart(off, part)
+		oCCH(hash, tread)
+	}
+	oDCH := d.handlers.DownloadCompleteHandler
+	d.handlers.DownloadCompleteHandler = func(hash string, tread int64) {
 		if hash != MAIN_HASH {
-			off, part := item.getPart(hash)
-			part.Compiled = true
-			item.savePart(off, part)
-			oCCH(hash, tread)
 			return
 		}
 		item.Parts = nil
 		item.Downloaded = item.TotalSize
 		m.UpdateItem(item)
-		oCCH(hash, tread)
+		oDCH(hash, tread)
 	}
 }
 

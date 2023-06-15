@@ -216,10 +216,7 @@ func (d *Downloader) Start() (err error) {
 	d.wg.Wait()
 	d.handlers.DownloadCompleteHandler(MAIN_HASH, d.contentLength.v())
 	d.Log("All segments downloaded!")
-	// d.Log("Compiling segments...")
-	// err = d.compile()
-	svPath := strings.Join([]string{d.dlLoc, d.fileName}, "/")
-	err = os.Rename(d.fName, svPath)
+	err = os.Rename(d.fName, d.GetSavePath())
 	return
 }
 
@@ -250,8 +247,7 @@ func (d *Downloader) Resume(parts map[int64]*ItemPart) (err error) {
 	d.wg.Wait()
 	d.handlers.DownloadCompleteHandler(MAIN_HASH, d.contentLength.v())
 	d.Log("All segments downloaded!")
-	// d.Log("Compiling segments...")
-	// err = d.compile()
+	err = os.Rename(d.fName, d.GetSavePath())
 	return
 }
 
