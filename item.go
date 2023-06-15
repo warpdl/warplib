@@ -78,7 +78,7 @@ func (i *Item) addPart(hash string, ioff, foff int64) {
 
 func (i *Item) savePart(offset int64, part *ItemPart) {
 	i.mu.Lock()
-	defer i.mu.Lock()
+	defer i.mu.Unlock()
 	i.Parts[offset] = part
 }
 
