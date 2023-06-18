@@ -8,19 +8,28 @@ import (
 	"sync"
 )
 
+var __USERDATA_FILE_NAME = ConfigDir + "/userdata.warp"
+
 type Manager struct {
 	items ItemsMap
 	f     *os.File
 	mu    *sync.RWMutex
+	wg    *sync.WaitGroup
+	fmu   *sync.RWMutex
 }
 
 func InitManager() (m *Manager, err error) {
 	m = &Manager{
 		items: make(ItemsMap),
 		mu:    new(sync.RWMutex),
+		wg:    new(sync.WaitGroup),
+		fmu:   new(sync.RWMutex),
 	}
-	fn := ConfigDir + "/userdata.warp"
-	m.f, err = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, os.ModePerm)
+	m.f, err = os.OpenFile(
+		__USERDATA_FILE_NAME,
+		os.O_RDWR|os.O_CREATE,
+		os.ModePerm,
+	)
 	if err != nil {
 		m = nil
 		return
@@ -49,6 +58,8 @@ func (m *Manager) populateMemPart() {
 }
 
 func (m *Manager) AddDownload(d *Downloader, opts *AddDownloadOpts) (err error) {
+	m.fmu.RLock()
+	defer m.fmu.RUnlock()
 	if opts == nil {
 		opts = &AddDownloadOpts{}
 	}
@@ -73,6 +84,7 @@ func (m *Manager) AddDownload(d *Downloader, opts *AddDownloadOpts) (err error) 
 	if err != nil {
 		return err
 	}
+	m.wg.Add(1)
 	m.UpdateItem(item)
 	m.patchHandlers(d, item)
 	return
@@ -113,6 +125,7 @@ func (m *Manager) patchHandlers(d *Downloader, item *Item) {
 		if hash != MAIN_HASH {
 			return
 		}
+		defer m.wg.Done()
 		item.Parts = nil
 		item.Downloaded = item.TotalSize
 		m.UpdateItem(item)
@@ -207,6 +220,8 @@ type ResumeDownloadOpts struct {
 }
 
 func (m *Manager) ResumeDownload(client *http.Client, hash string, opts *ResumeDownloadOpts) (item *Item, err error) {
+	m.fmu.RLock()
+	defer m.fmu.RUnlock()
 	if opts == nil {
 		opts = &ResumeDownloadOpts{}
 	}
@@ -227,9 +242,19 @@ func (m *Manager) ResumeDownload(client *http.Client, hash string, opts *ResumeD
 		err = er
 		return
 	}
+	m.wg.Add(1)
 	m.patchHandlers(d, item)
 	item.dAlloc = d
 	return
+}
+
+func (m *Manager) Flush() error {
+	m.wg.Wait()
+	m.fmu.Lock()
+	defer m.fmu.Unlock()
+	m.items = make(ItemsMap)
+	m.encode(m.items)
+	return os.RemoveAll(DlDataDir)
 }
 
 func (m *Manager) Close() error {
