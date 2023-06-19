@@ -96,7 +96,7 @@ func NewDownloader(client *http.Client, url string, opts *DownloaderOpts) (d *Do
 	if opts.Headers == nil {
 		opts.Headers = make(Headers, 0)
 	}
-	opts.Headers.Update(__USER_AGENT_KEY, DEF_USER_AGENT)
+	opts.Headers.Update(USER_AGENT_KEY, DEF_USER_AGENT)
 	// loc := opts.DownloadDirectory
 	// loc = strings.TrimSuffix(loc, "/")
 	// if loc == "" {
@@ -163,7 +163,7 @@ func initDownloader(client *http.Client, hash, url string, cLength ContentLength
 	if opts.Headers == nil {
 		opts.Headers = make(Headers, 0)
 	}
-	opts.Headers.Update(__USER_AGENT_KEY, DEF_USER_AGENT)
+	opts.Headers.Update(USER_AGENT_KEY, DEF_USER_AGENT)
 	// loc := opts.DownloadDirectory
 	// loc = strings.TrimSuffix(loc, "/")
 	// if loc == "" {

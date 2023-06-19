@@ -3,14 +3,14 @@ package warplib
 import "net/http"
 
 const (
-	__USER_AGENT_KEY = "User-Agent"
+	USER_AGENT_KEY = "User-Agent"
 )
 
 type Headers []Header
 
 func (h Headers) Get(key string) (index int, have bool) {
 	for i, x := range h {
-		if x.key != key {
+		if x.Key != key {
 			continue
 		}
 		index = i
@@ -42,13 +42,13 @@ func (h Headers) Add(header http.Header) {
 }
 
 type Header struct {
-	key, value string
+	Key, Value string
 }
 
 func (h *Header) Set(header http.Header) {
-	header.Set(h.key, h.value)
+	header.Set(h.Key, h.Value)
 }
 
 func (h *Header) Add(header http.Header) {
-	header.Add(h.key, h.value)
+	header.Add(h.Key, h.Value)
 }
