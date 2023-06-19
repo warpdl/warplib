@@ -44,6 +44,8 @@ type Downloader struct {
 	handlers *Handlers
 	// unique hash of this download
 	hash string
+	// headers to use for http requests
+	headers Headers
 
 	dlPath string
 	wg     *sync.WaitGroup
@@ -73,7 +75,10 @@ type DownloaderOpts struct {
 	// MaxSegments sets the maximum number of file segments
 	// to be created for the downloading the file.
 	MaxSegments int
-	Handlers    *Handlers
+
+	Headers Headers
+
+	Handlers *Handlers
 }
 
 // NewDownloader creates a new downloader with provided arguments.
@@ -87,6 +92,9 @@ func NewDownloader(client *http.Client, url string, opts *DownloaderOpts) (d *Do
 	}
 	if opts.MaxConnections == 0 {
 		opts.MaxConnections = DEF_MAX_CONNS
+	}
+	if opts.Headers == nil {
+		opts.Headers = []Header{{"User-Agent", DEF_USER_AGENT}}
 	}
 	// loc := opts.DownloadDirectory
 	// loc = strings.TrimSuffix(loc, "/")
@@ -110,6 +118,7 @@ func NewDownloader(client *http.Client, url string, opts *DownloaderOpts) (d *Do
 		fileName: opts.FileName,
 		dlLoc:    opts.DownloadDirectory,
 		maxParts: opts.MaxSegments,
+		headers:  opts.Headers,
 	}
 	err = d.fetchInfo()
 	if err != nil {
@@ -416,7 +425,7 @@ func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64, repeated bool
 	// start downloading the content in provided
 	// offset range until part becomes slower than
 	// expected speed.
-	slow, err := part.download(ioff, foff, false)
+	slow, err := part.download(d.headers, ioff, foff, false)
 	if err != nil {
 		d.handlers.ErrorHandler(hash, err)
 		return
@@ -435,7 +444,7 @@ func (d *Downloader) runPart(part *Part, ioff, foff, espeed int64, repeated bool
 		// don't spawn new parts and forcefully download
 		// rest of the content in slow part.
 		d.Log("%s: Max part limit reached, continuing slow part...", hash)
-		_, err := part.download(poff, foff, true)
+		_, err := part.download(d.headers, poff, foff, true)
 		if err != nil {
 			d.handlers.ErrorHandler(hash, err)
 			return
@@ -608,10 +617,10 @@ func (d *Downloader) makeRequest(method string, hdrs ...Header) (*http.Response,
 		return nil, err
 	}
 	header := req.Header
-	setUserAgent(header)
 	for _, hdr := range hdrs {
 		hdr.Set(header)
 	}
+	d.headers.Set(header)
 	return d.client.Do(req)
 }
 

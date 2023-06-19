@@ -74,11 +74,12 @@ func (m *Manager) AddDownload(d *Downloader, opts *AddDownloadOpts) (err error) 
 		d.dlLoc,
 		d.hash,
 		d.contentLength,
-		&ItemOpts{
+		&itemOpts{
 			AbsoluteLocation: opts.AbsoluteLocation,
 			Child:            opts.IsChildren,
 			Hide:             opts.IsHidden,
 			ChildHash:        cHash,
+			Headers:          d.headers,
 		},
 	)
 	if err != nil {
@@ -216,6 +217,7 @@ type ResumeDownloadOpts struct {
 	// MaxSegments sets the maximum number of file segments
 	// to be created for the downloading the file.
 	MaxSegments int
+	Headers     Headers
 	Handlers    *Handlers
 }
 
@@ -230,6 +232,20 @@ func (m *Manager) ResumeDownload(client *http.Client, hash string, opts *ResumeD
 		err = ErrDownloadNotFound
 		return
 	}
+	if item.Headers == nil {
+		item.Headers = make(Headers, 0)
+	}
+	if opts.Headers != nil {
+		for i, ih := range item.Headers {
+			for _, oh := range opts.Headers {
+				if ih != oh {
+					continue
+				}
+				item.Headers[i] = oh
+			}
+		}
+		m.UpdateItem(item)
+	}
 	d, er := initDownloader(client, hash, item.Url, item.TotalSize, &DownloaderOpts{
 		ForceParts:        opts.ForceParts,
 		MaxConnections:    opts.MaxConnections,
@@ -237,6 +253,7 @@ func (m *Manager) ResumeDownload(client *http.Client, hash string, opts *ResumeD
 		Handlers:          opts.Handlers,
 		FileName:          item.Name,
 		DownloadDirectory: item.DownloadLocation,
+		Headers:           item.Headers,
 	})
 	if er != nil {
 		err = er

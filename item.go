@@ -10,6 +10,7 @@ type Item struct {
 	Hash             string
 	Name             string
 	Url              string
+	Headers          Headers
 	DateAdded        time.Time
 	TotalSize        ContentLength
 	Downloaded       ContentLength
@@ -32,15 +33,16 @@ type ItemPart struct {
 
 type ItemsMap map[string]*Item
 
-type ItemOpts struct {
+type itemOpts struct {
 	Hide, Child      bool
 	ChildHash        string
 	AbsoluteLocation string
+	Headers          []Header
 }
 
-func newItem(mu *sync.RWMutex, name, url, dlloc, hash string, totalSize ContentLength, opts *ItemOpts) (i *Item, err error) {
+func newItem(mu *sync.RWMutex, name, url, dlloc, hash string, totalSize ContentLength, opts *itemOpts) (i *Item, err error) {
 	if opts == nil {
-		opts = &ItemOpts{}
+		opts = &itemOpts{}
 	}
 	opts.AbsoluteLocation, err = filepath.Abs(
 		opts.AbsoluteLocation,
@@ -52,6 +54,7 @@ func newItem(mu *sync.RWMutex, name, url, dlloc, hash string, totalSize ContentL
 		Hash:             hash,
 		Name:             name,
 		Url:              url,
+		Headers:          opts.Headers,
 		DateAdded:        time.Now(),
 		TotalSize:        totalSize,
 		DownloadLocation: dlloc,

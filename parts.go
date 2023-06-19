@@ -106,14 +106,14 @@ func (p *Part) setEpeed(espeed int64) {
 	p.etime = getDownloadTime(espeed, int64(p.chunk))
 }
 
-func (p *Part) download(ioff, foff int64, force bool) (slow bool, err error) {
+func (p *Part) download(headers Headers, ioff, foff int64, force bool) (slow bool, err error) {
 	req, er := http.NewRequest(http.MethodGet, p.url, nil)
 	if er != nil {
 		err = er
 		return
 	}
 	header := req.Header
-	setUserAgent(header)
+	headers.Set(header)
 	if foff != -1 {
 		setRange(header, ioff, foff)
 	} else {

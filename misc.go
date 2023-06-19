@@ -26,6 +26,7 @@ const (
 const (
 	DEF_MAX_CONNS  = 1
 	DEF_CHUNK_SIZE = 32 * KB
+	DEF_USER_AGENT = "Warp/1.0"
 )
 
 const MAIN_HASH = "main"
@@ -48,10 +49,6 @@ func getSpeed(op func() error) (te time.Duration, err error) {
 	}
 	te = time.Since(tn)
 	return
-}
-
-func setUserAgent(header http.Header) {
-	header.Set("User-Agent", "Warp/1.0")
 }
 
 func parseFileName(req *http.Request, cd string) (fn string) {

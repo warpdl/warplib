@@ -2,6 +2,20 @@ package warplib
 
 import "net/http"
 
+type Headers []Header
+
+func (h Headers) Set(header http.Header) {
+	for _, x := range h {
+		x.Set(header)
+	}
+}
+
+func (h Headers) Add(header http.Header) {
+	for _, x := range h {
+		x.Add(header)
+	}
+}
+
 type Header struct {
 	key, value string
 }
