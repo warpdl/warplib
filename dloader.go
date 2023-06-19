@@ -94,8 +94,9 @@ func NewDownloader(client *http.Client, url string, opts *DownloaderOpts) (d *Do
 		opts.MaxConnections = DEF_MAX_CONNS
 	}
 	if opts.Headers == nil {
-		opts.Headers = []Header{{"User-Agent", DEF_USER_AGENT}}
+		opts.Headers = make(Headers, 0)
 	}
+	opts.Headers.Update(__USER_AGENT_KEY, DEF_USER_AGENT)
 	// loc := opts.DownloadDirectory
 	// loc = strings.TrimSuffix(loc, "/")
 	// if loc == "" {
@@ -159,6 +160,10 @@ func initDownloader(client *http.Client, hash, url string, cLength ContentLength
 	if opts.MaxConnections == 0 {
 		opts.MaxConnections = DEF_MAX_CONNS
 	}
+	if opts.Headers == nil {
+		opts.Headers = make(Headers, 0)
+	}
+	opts.Headers.Update(__USER_AGENT_KEY, DEF_USER_AGENT)
 	// loc := opts.DownloadDirectory
 	// loc = strings.TrimSuffix(loc, "/")
 	// if loc == "" {

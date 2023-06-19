@@ -2,7 +2,32 @@ package warplib
 
 import "net/http"
 
+const (
+	__USER_AGENT_KEY = "User-Agent"
+)
+
 type Headers []Header
+
+func (h Headers) Get(key string) (index int, have bool) {
+	for i, x := range h {
+		if x.key != key {
+			continue
+		}
+		index = i
+		have = true
+		break
+	}
+	return
+}
+
+func (h *Headers) Update(key, value string) {
+	i, ok := h.Get(key)
+	if ok {
+		(*h)[i] = Header{key, value}
+		return
+	}
+	*h = append(*h, Header{key, value})
+}
 
 func (h Headers) Set(header http.Header) {
 	for _, x := range h {
