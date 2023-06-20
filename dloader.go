@@ -79,6 +79,8 @@ type DownloaderOpts struct {
 	Headers Headers
 
 	Handlers *Handlers
+
+	SkipSetup bool
 }
 
 // NewDownloader creates a new downloader with provided arguments.
@@ -96,7 +98,7 @@ func NewDownloader(client *http.Client, url string, opts *DownloaderOpts) (d *Do
 	if opts.Headers == nil {
 		opts.Headers = make(Headers, 0)
 	}
-	opts.Headers.Update(USER_AGENT_KEY, DEF_USER_AGENT)
+	opts.Headers.InitOrUpdate(USER_AGENT_KEY, DEF_USER_AGENT)
 	// loc := opts.DownloadDirectory
 	// loc = strings.TrimSuffix(loc, "/")
 	// if loc == "" {
@@ -123,6 +125,10 @@ func NewDownloader(client *http.Client, url string, opts *DownloaderOpts) (d *Do
 	}
 	err = d.fetchInfo()
 	if err != nil {
+		return
+	}
+	if opts.SkipSetup {
+		// Skip setting up dl path and stuff for a general download lookup.
 		return
 	}
 	d.setHash()
@@ -163,7 +169,7 @@ func initDownloader(client *http.Client, hash, url string, cLength ContentLength
 	if opts.Headers == nil {
 		opts.Headers = make(Headers, 0)
 	}
-	opts.Headers.Update(USER_AGENT_KEY, DEF_USER_AGENT)
+	opts.Headers.InitOrUpdate(USER_AGENT_KEY, DEF_USER_AGENT)
 	// loc := opts.DownloadDirectory
 	// loc = strings.TrimSuffix(loc, "/")
 	// if loc == "" {

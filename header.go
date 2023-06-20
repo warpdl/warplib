@@ -20,6 +20,14 @@ func (h Headers) Get(key string) (index int, have bool) {
 	return
 }
 
+func (h *Headers) InitOrUpdate(key, value string) {
+	_, ok := h.Get(key)
+	if ok {
+		return
+	}
+	*h = append(*h, Header{key, value})
+}
+
 func (h *Headers) Update(key, value string) {
 	i, ok := h.Get(key)
 	if ok {
