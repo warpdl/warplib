@@ -286,6 +286,12 @@ func (m *Manager) Flush() error {
 func (m *Manager) FlushOne(hash string) error {
 	m.fmu.RLock()
 	defer m.fmu.RUnlock()
+	m.mu.RLock()
+	_, found := m.items[hash]
+	m.mu.RUnlock()
+	if !found {
+		return ErrFlushHashNotFound
+	}
 	m.deleteItem(hash)
 	m.encode(m.items)
 	return os.RemoveAll(GetPath(DlDataDir, hash))

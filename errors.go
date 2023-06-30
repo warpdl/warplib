@@ -8,4 +8,6 @@ var (
 	ErrNotSupported                = errors.New("file you're trying to download is not supported yet")
 
 	ErrDownloadNotFound = errors.New("Item you are trying to download is not found")
+
+	ErrFlushHashNotFound = errors.New("Item you are trying to flush is not found")
 )
