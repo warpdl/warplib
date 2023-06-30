@@ -15,7 +15,8 @@ type Manager struct {
 	f     *os.File
 	mu    *sync.RWMutex
 	wg    *sync.WaitGroup
-	fmu   *sync.RWMutex
+	// flush-mutex
+	fmu *sync.RWMutex
 }
 
 func InitManager() (m *Manager, err error) {
@@ -85,8 +86,9 @@ func (m *Manager) AddDownload(d *Downloader, opts *AddDownloadOpts) (err error) 
 	if err != nil {
 		return err
 	}
-	m.wg.Add(1)
+	// item.dAlloc = d
 	m.UpdateItem(item)
+	m.wg.Add(1)
 	m.patchHandlers(d, item)
 	return
 }
@@ -145,6 +147,12 @@ func (m *Manager) mapItem(item *Item) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.items[item.Hash] = item
+}
+
+func (m *Manager) deleteItem(hash string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.items, hash)
 }
 
 func (m *Manager) UpdateItem(item *Item) {
@@ -244,7 +252,6 @@ func (m *Manager) ResumeDownload(client *http.Client, hash string, opts *ResumeD
 				item.Headers[i] = oh
 			}
 		}
-		m.UpdateItem(item)
 	}
 	d, er := initDownloader(client, hash, item.Url, item.TotalSize, &DownloaderOpts{
 		ForceParts:        opts.ForceParts,
@@ -262,6 +269,7 @@ func (m *Manager) ResumeDownload(client *http.Client, hash string, opts *ResumeD
 	m.wg.Add(1)
 	m.patchHandlers(d, item)
 	item.dAlloc = d
+	// m.UpdateItem(item)
 	return
 }
 
@@ -272,6 +280,15 @@ func (m *Manager) Flush() error {
 	m.items = make(ItemsMap)
 	m.encode(m.items)
 	return os.RemoveAll(DlDataDir)
+}
+
+// TODO: make FlushOne safe for flushing while the item is being downloaded
+func (m *Manager) FlushOne(hash string) error {
+	m.fmu.RLock()
+	defer m.fmu.RUnlock()
+	m.deleteItem(hash)
+	m.encode(m.items)
+	return os.RemoveAll(GetPath(DlDataDir, hash))
 }
 
 func (m *Manager) Close() error {
