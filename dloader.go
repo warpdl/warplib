@@ -220,7 +220,10 @@ func (d *Downloader) Start() (err error) {
 	if err != nil {
 		return
 	}
-	defer d.f.Close()
+	defer func() {
+		d.f.Close()
+		err = os.Rename(d.fName, d.GetSavePath())
+	}()
 	d.Log("Starting download...")
 	d.ohmap.Make()
 	partSize, rpartSize := d.getPartSize()
@@ -236,7 +239,6 @@ func (d *Downloader) Start() (err error) {
 	d.wg.Wait()
 	d.handlers.DownloadCompleteHandler(MAIN_HASH, d.contentLength.v())
 	d.Log("All segments downloaded!")
-	err = os.Rename(d.fName, d.GetSavePath())
 	return
 }
 
@@ -252,7 +254,10 @@ func (d *Downloader) Resume(parts map[int64]*ItemPart) (err error) {
 	if err != nil {
 		return
 	}
-	defer d.f.Close()
+	defer func() {
+		d.f.Close()
+		err = os.Rename(d.fName, d.GetSavePath())
+	}()
 	d.Log("Resuming download...")
 	d.ohmap.Make()
 	espeed := 4 * MB / int64(len(parts))
@@ -267,7 +272,6 @@ func (d *Downloader) Resume(parts map[int64]*ItemPart) (err error) {
 	d.wg.Wait()
 	d.handlers.DownloadCompleteHandler(MAIN_HASH, d.contentLength.v())
 	d.Log("All segments downloaded!")
-	err = os.Rename(d.fName, d.GetSavePath())
 	return
 }
 
