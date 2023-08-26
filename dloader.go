@@ -53,7 +53,6 @@ type Downloader struct {
 	l      *log.Logger
 	lw     io.WriteCloser
 	f      *os.File
-	fName  string
 }
 
 // Optional fields of downloader
@@ -222,7 +221,7 @@ func (d *Downloader) Start() (err error) {
 	}
 	defer func() {
 		d.f.Close()
-		err = os.Rename(d.fName, d.GetSavePath())
+		// err = os.Rename(d.fName, d.GetSavePath())
 	}()
 	d.Log("Starting download...")
 	d.ohmap.Make()
@@ -256,7 +255,7 @@ func (d *Downloader) Resume(parts map[int64]*ItemPart) (err error) {
 	}
 	defer func() {
 		d.f.Close()
-		err = os.Rename(d.fName, d.GetSavePath())
+		// err = os.Rename(d.fName, d.GetSavePath())
 	}()
 	d.Log("Resuming download...")
 	d.ohmap.Make()
@@ -276,8 +275,8 @@ func (d *Downloader) Resume(parts map[int64]*ItemPart) (err error) {
 }
 
 func (d *Downloader) openFile() (err error) {
-	d.fName = d.dlPath + "warp.dl"
-	d.f, err = os.OpenFile(d.fName,
+	// d.fName = d.dlPath + "warp.dl"
+	d.f, err = os.OpenFile(d.GetSavePath(),
 		os.O_RDWR|os.O_CREATE,
 		0666,
 	)
@@ -698,55 +697,3 @@ func (d *Downloader) prepareDownloader() (err error) {
 	}
 	return
 }
-
-// func (d *Downloader) compile() (err error) {
-// 	// defer d.lw.Close()
-// 	// svPath := strings.Join([]string{d.dlLoc, d.fileName}, "/")
-// 	// err = os.Rename(d.fName, svPath)
-// 	// return
-// 	// d.handlers.CompileStartHandler("main")
-// 	// svPath := strings.Join([]string{d.dlLoc, d.fileName}, "/")
-// 	// offsets, partList := d.ohmap.Dump()
-// 	// if len(offsets) == 1 {
-// 	// 	hash := d.ohmap.GetUnsafe(offsets[0])
-// 	// 	fName := getFileName(d.dlPath, hash)
-// 	// 	err = os.Rename(fName, svPath)
-// 	// 	return
-// 	// }
-// 	// file, ef := os.Create(svPath)
-// 	// if ef != nil {
-// 	// 	err = ef
-// 	// 	return
-// 	// }
-// 	// sortInt64s(offsets)
-// 	// d.Log("Compiling %d parts...", len(offsets))
-// 	// d.Log("Compiling Parts: %v", partList)
-// 	// for _, offset := range offsets {
-// 	// 	hash := d.ohmap.GetUnsafe(offset)
-// 	// 	fName := getFileName(
-// 	// 		d.dlPath,
-// 	// 		hash,
-// 	// 	)
-// 	// 	f, ef := os.Open(fName)
-// 	// 	if ef != nil {
-// 	// 		err = ef
-// 	// 		return
-// 	// 	}
-// 	// 	_, err = io.Copy(file, NewProxyReader(f, func(n int) {
-// 	// 		d.handlers.CompileProgressHandler("main", n)
-// 	// 	}))
-// 	// 	if err != nil {
-// 	// 		return
-// 	// 	}
-// 	// 	defer func() {
-// 	// 		er := os.Remove(fName)
-// 	// 		if er != nil {
-// 	// 			d.Log("Failed to remove part %s: %w", hash, er)
-// 	// 		}
-// 	// 	}()
-// 	// }
-// 	// d.Log("Compilation complete!")
-// 	// d.handlers.CompileCompleteHandler("main", d.contentLength.v())
-// 	// err = d.lw.Close()
-// 	// return
-// }
