@@ -58,7 +58,13 @@ func (h *Handlers) setDefault(l *log.Logger) {
 	}
 	if h.ErrorHandler == nil {
 		h.ErrorHandler = func(hash string, err error) {
-			wlog(l, "%s: Error: %w", hash, err)
+			wlog(l, "%s: Error: %s", hash, err.Error())
+		}
+	} else {
+		errHandler := h.ErrorHandler
+		h.ErrorHandler = func(hash string, err error) {
+			wlog(l, "%s: Error: %s", hash, err.Error())
+			errHandler(hash, err)
 		}
 	}
 }
