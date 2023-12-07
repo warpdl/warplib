@@ -60,4 +60,5 @@ Pull requests and stars are always welcome. For bugs and feature requests, [plea
 ## **License**
 
 Copyright © 2023, [WarpDL](https://github.com/warpdl).
+
 Released under the [MIT License](LICENSE).
